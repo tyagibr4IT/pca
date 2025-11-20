@@ -11,12 +11,34 @@ services:
       - ./backend:/app
     working_dir: /app
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      db:
+        condition: service_healthy
   frontend:
     build:
       context: ./frontend
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
+    # volumes removed to allow serving built dist directory
     working_dir: /app
     command: ["serve", "-s", "dist", "-l", "3000"]
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pca
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:
