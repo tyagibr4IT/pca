@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Login — CloudOpt (Dark)</title>
+    <link href="./vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="./css/login.css" rel="stylesheet">
+  </head>
+  <body class="bg-dark-login">
+    <div class="login-wrapper container-fluid min-vh-100 d-flex align-items-center">
+      <div class="row w-100 g-0 justify-content-center">
+        <!-- Left: Login form -->
+        <div class="col-12 col-md-6 d-flex align-items-center">
+          <div class="login-card text-white">
+            <div class="login-brand text-center mb-3 d-md-none">
+              <img src="./assets/logo.png" alt="logo" class="logo mb-2" />
+              <h1 class="h5 mb-0">Cloud Optimizer</h1>
+            </div>
+
+            <form id="loginForm" class="px-3 py-3">
+              <div class="mb-3">
+                <label for="username" class="form-label visually-hidden">Username</label>
+                <input id="username" name="username" class="form-control form-control-dark" placeholder="Username" required>
+              </div>
+              <div class="mb-3">
+                <label for="password" class="form-label visually-hidden">Password</label>
+                <input id="password" name="password" type="password" class="form-control form-control-dark" placeholder="Password" required>
+              </div>
+              <!-- removed remember-me checkbox per request -->
+
+              <div class="d-grid mb-3">
+                <button id="signinBtn" class="btn btn-primary">Sign In</button>
+              </div>
+
+              <div id="loginMsg" class="mt-3 text-center"></div>
+            </form>
+
+            <div class="login-footer text-center mt-4 small text-muted">© 2025 CloudOpt</div>
+          </div>
+        </div>
+
+        <!-- Right: Large logo / branding -->
+        <div class="col-12 col-md-6 d-flex align-items-center">
+          <div class="right-panel text-center text-white py-5 px-4 w-100">
+            <div class="brand-box mx-auto">
+              <img src="./assets/logo.png" alt="Cloud Optimizer logo" class="brand-logo-large mb-3" />
+              <h2 class="h4 mb-2">Cloud Optimizer</h2>
+              <p class="text-white">Manage and monitor your cloud metrics from a single dashboard.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Simple demo handler: posts to /api/auth/login if available, otherwise mock
+      document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const u = document.getElementById('username').value;
+        const p = document.getElementById('password').value;
+        const msg = document.getElementById('loginMsg');
+        msg.className = 'text-center text-warning';
+        msg.textContent = 'Signing in...';
+        try{
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({username: u, password: p})
+          });
+            if(res.ok){
+            const j = await res.json();
+            msg.className = 'text-center text-success';
+            msg.textContent = 'Signed in (demo).';
+            localStorage.setItem('token', j.access_token || 'demo-token');
+              setTimeout(()=> location.href = './dashboard.html', 700);
+          } else {
+            msg.className = 'text-center text-danger';
+            msg.textContent = 'Invalid credentials';
+          }
+        } catch(err){
+          msg.className = 'text-center text-info';
+          msg.textContent = 'Offline demo: accepting any credentials.';
+          localStorage.setItem('token', 'demo-token');
+          setTimeout(()=> location.href = './dashboard.html', 700);
+        }
+      });
+    </script>
+  </body>
+</html>

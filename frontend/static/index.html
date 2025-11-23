@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CloudOpt — Static Demo</title>
+    <!-- Local Bootstrap CSS (vendored) -->
+    <link href="./vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <header class="site-header mb-4">
+      <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
+        <div class="container">
+          <a class="navbar-brand" href="#">CloudOpt — Static Demo</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navCollapse" aria-controls="navCollapse" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navCollapse">
+            <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+              <li class="nav-item"><a class="nav-link" href="#dashboard">Dashboard</a></li>
+              <li class="nav-item"><a class="nav-link" href="#chat">Chat</a></li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="container">
+      <div class="row g-3">
+        <div id="dashboard" class="col-12 col-md-8">
+          <div class="card p-3">
+            <h2 class="h5">Inventory Summary</h2>
+            <div id="chart" class="chart-placeholder">(chart area)</div>
+          </div>
+        </div>
+
+        <aside id="chat" class="col-12 col-md-4">
+          <div class="card p-3">
+            <h2 class="h5">Chat</h2>
+            <div class="mb-2">
+              <textarea id="q" class="form-control" placeholder="Ask a question..."></textarea>
+            </div>
+            <div class="d-grid mb-2">
+              <button id="askBtn" class="btn btn-primary">Ask</button>
+            </div>
+            <div id="resp" class="alert alert-secondary" role="status">Responses appear here</div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="site-footer mt-4 py-3 bg-light">
+      <div class="container text-center text-muted">&copy; 2025 CloudOpt</div>
+    </footer>
+
+    <script src="./vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="./js/app.js" defer></script>
+  </body>
+</html>

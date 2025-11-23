@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Metrics — Cloud Optimizer</title>
+    <link href="./vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="./css/dashboard.css" rel="stylesheet">
+  </head>
+  <body class="bg-dark-login">
+    <nav class="navbar navbar-dark bg-dark px-3">
+      <a class="navbar-brand" href="./dashboard.html">Cloud Optimizer</a>
+      <div>
+        <a class="btn btn-sm btn-outline-light me-2" href="./clients.html">Back to Clients</a>
+        <a id="openChatBtn" class="btn btn-sm btn-outline-light" href="#">Open Chat</a>
+      </div>
+    </nav>
+
+    <div class="container-fluid dashboard-layout">
+      <div class="row g-0">
+        <aside class="col-12 col-lg-2 sidebar d-flex flex-column align-items-center py-4">
+          <img src="./assets/logo.png" alt="logo" class="sidebar-logo mb-3" />
+          <nav class="nav flex-column w-100 px-2">
+            <a class="nav-link text-white d-flex align-items-center" href="./dashboard.html">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                <path d="M8.354 1.146a.5.5 0 0 0-.708 0L1 7.793V14.5A1.5 1.5 0 0 0 2.5 16h3A1.5 1.5 0 0 0 7 14.5V11h2v3.5A1.5 1.5 0 0 0 10.5 16h3A1.5 1.5 0 0 0 15 14.5V7.793L8.354 1.146z"/>
+              </svg>
+              Dashboard
+            </a>
+            <a class="nav-link text-white d-flex align-items-center" href="./clients.html">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3z"/>
+                <path fill-rule="evenodd" d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+              </svg>
+              Client Management
+            </a>
+            <a class="nav-link text-white d-flex align-items-center" href="./admin.html">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3z"/>
+                <path fill-rule="evenodd" d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+              </svg>
+              User Management
+            </a>
+            <a class="nav-link text-white d-flex align-items-center" href="./metrics.html">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.5 9H8v3.5a.5.5 0 0 1-1 0V9H4.5a.5.5 0 0 1 0-1H7V4.5a.5.5 0 0 1 1 0V8h3.5a.5.5 0 0 1 0 1z"/>
+              </svg>
+              Metrics
+            </a>
+            <a class="nav-link text-white d-flex align-items-center mt-3 px-2" href="./clients.html?action=add" role="button" aria-label="Add Client">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                <path d="M8 4a.5.5 0 0 1 .5.5V7.5H11a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V8.5H5a.5.5 0 0 1 0-1h2.5V4.5A.5.5 0 0 1 8 4z"/>
+              </svg>
+              Add Client
+            </a>
+            <a class="nav-link text-white d-flex align-items-center mt-2 px-2 sidebar-signout" href="#" role="button" aria-label="Sign Out">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                <path d="M6 2a1 1 0 0 0-1 1v2h1V3h7v10H6v-2H5v2a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H6z"/>
+                <path d="M.146 8.354a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L1.707 7.5H10.5a.5.5 0 0 1 0 1H1.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3z"/>
+              </svg>
+              Sign Out
+            </a>
+          </nav>
+        </aside>
+
+        <main class="col-12 col-lg-10">
+          <div class="container-fluid dashboard-wrap">
+            <div class="row mt-4">
+              <div class="col-12">
+                <h3 id="metricsTitle" class="text-white">Metrics</h3>
+                <p id="metricsSub" class="text-muted">Loading client details…</p>
+                  <div id="clientInfo" class="mb-2"></div>
+                  <div id="metricsContent" class="mb-3"></div>
+              </div>
+            </div>
+
+            <div class="row g-3 quick-panels mt-3">
+              <div class="col-6 col-md-4">
+                <div class="card card-dark p-3">
+                  <h6 class="mb-1">CPU Usage</h6>
+                  <p id="metricCpuTop" class="display-6 mb-0">27.4%</p>
+                </div>
+              </div>
+              <div class="col-6 col-md-4">
+                <div class="card card-dark p-3">
+                  <h6 class="mb-1">Memory (MB)</h6>
+                  <p id="metricMemTop" class="display-6 mb-0">2,048 MB</p>
+                </div>
+              </div>
+              <div class="col-6 col-md-4">
+                <div class="card card-dark p-3">
+                  <h6 class="mb-1">Errors / min</h6>
+                  <p id="metricErrTop" class="display-6 mb-0">1 /min</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-12">
+                <div class="row g-3 quick-panels">
+                  <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card card-dark p-3">
+                      <h6 class="mb-1">VMs</h6>
+                      <p id="metricVMs" class="display-6 mb-0">12</p>
+                        <canvas id="chartVMs" width="140" height="40" class="w-100 mt-2"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card card-dark p-3">
+                      <h6 class="mb-1">Databases</h6>
+                      <p id="metricDBs" class="display-6 mb-0">3</p>
+                        <canvas id="chartDBs" width="140" height="40" class="w-100 mt-2"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card card-dark p-3">
+                      <h6 class="mb-1">Storage (GB)</h6>
+                      <p id="metricStorage" class="display-6 mb-0">1,200 GB</p>
+                        <canvas id="chartStorage" width="140" height="40" class="w-100 mt-2"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card card-dark p-3">
+                      <h6 class="mb-1">Network (Mbps)</h6>
+                      <p id="metricNet" class="display-6 mb-0">120 Mbps</p>
+                        <canvas id="chartNet" width="140" height="40" class="w-100 mt-2"></canvas>
+                    </div>
+                  </div>
+
+                  <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card card-dark p-3">
+                      <h6 class="mb-1">CPU Usage</h6>
+                      <p id="metricCpu" class="display-6 mb-0">27.4%</p>
+                        <canvas id="chartCpu" width="140" height="40" class="w-100 mt-2"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card card-dark p-3">
+                      <h6 class="mb-1">Memory (MB)</h6>
+                      <p id="metricMem" class="display-6 mb-0">2,048 MB</p>
+                        <canvas id="chartMem" width="140" height="40" class="w-100 mt-2"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card card-dark p-3">
+                      <h6 class="mb-1">Errors / min</h6>
+                      <p id="metricErr" class="display-6 mb-0">1 /min</p>
+                        <canvas id="chartErr" width="140" height="40" class="w-100 mt-2"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card card-dark p-3">
+                      <h6 class="mb-1">Active Alerts</h6>
+                      <p id="metricAlerts" class="display-6 mb-0">2</p>
+                        <canvas id="chartAlerts" width="140" height="40" class="w-100 mt-2"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row mt-2">
+              <div class="col-12">
+                <div class="card card-dark p-3">
+                  <h5 class="mb-2">Metrics (sample)</h5>
+                  <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>Timestamp</th>
+                          <th>Metric</th>
+                          <th>Value</th>
+                        </tr>
+                      </thead>
+                      <tbody id="metricsTable"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script src="./vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="./js/common.js"></script>
+    <!-- Chart.js for inline sparklines (local vendored UMD build) -->
+    <script src="./vendor/chartjs/chart.umd.min.js"></script>
+    <script src="./js/metrics.js"></script>
+  </body>
+</html>

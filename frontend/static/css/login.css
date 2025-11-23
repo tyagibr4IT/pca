@@ -1,0 +1,148 @@
+/* AdminLTE-style dark login tweaks */
+:root {
+    --card-bg: #1f2937;
+    --card-border: rgba(255, 255, 255, 0.06);
+}
+
+body.bg-dark-login {
+    background: linear-gradient(180deg, #0b1220 0%, #0f1724 100%);
+    color: #e6eef9
+}
+
+.login-wrapper {
+    padding: 24px
+}
+
+.login-card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    padding: 18px
+}
+
+.login-brand .logo {
+    width: 56px;
+    height: 56px;
+    object-fit: contain;
+    border-radius: 8px
+}
+
+.form-control-dark {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #fff
+}
+
+.form-control-dark::placeholder {
+    color: rgba(255, 255, 255, 0.6)
+}
+
+.form-check-input {
+    background: #fff
+}
+
+.btn-outline-light {
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #fff
+}
+
+.login-footer {
+    opacity: 0.7
+}
+
+/* Right panel / branding */
+.right-panel {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+    border-radius: 12px
+}
+
+:root {
+    --brand-logo-size: 180px;
+    --brand-logo-size-sm: 120px;
+    --outer-offset: clamp(58px, 9.6vw, 144px)
+}
+
+.brand-box {
+    max-width: 380px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: var(--brand-logo-size)
+}
+
+.brand-logo-large {
+    width: var(--brand-logo-size);
+    height: var(--brand-logo-size);
+    object-fit: contain;
+    /* border-radius: 16px; */
+    /* background: rgba(255, 255, 255, 0.02); */
+    /* padding: 18px */
+}
+
+.brand-box p {
+    color: #fff
+}
+
+/* Make the card vertically centered and responsive */
+.col-md-6 .login-card {
+    box-shadow: 0 6px 18px rgba(2, 6, 23, 0.6)
+}
+
+@media (max-width:767px) {
+    .login-card {
+        margin: 12px
+    }
+
+    .brand-logo-large {
+        width: var(--brand-logo-size-sm);
+        height: var(--brand-logo-size-sm)
+    }
+
+    .brand-box {
+        height: var(--brand-logo-size-sm)
+    }
+
+    .right-panel {
+        padding-top: 24px;
+        padding-bottom: 24px
+    }
+}
+
+/* Make left and right panels flush (no gap) on desktop */
+@media (min-width:768px) {
+    .row.w-100.g-0 {
+        --bs-gutter-x: 0;
+    }
+
+    .col-md-6 {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    /* reduce outer widths: add padding on the exterior sides only */
+    .col-md-6:first-child {
+        padding-left: var(--outer-offset);
+    }
+
+    .col-md-6:last-child {
+        padding-right: var(--outer-offset);
+    }
+
+    .col-md-6 .login-card {
+        max-width: none;
+        width: 100%;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0
+    }
+
+    .col-md-6 .right-panel {
+        padding-left: 0;
+        padding-right: 0;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0
+    }
+}

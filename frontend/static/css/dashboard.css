@@ -1,0 +1,63 @@
+/* Dashboard styles matching dark login */
+:root{--card-bg: #111827}
+body.bg-dark-login{background: linear-gradient(180deg,#0b1220 0%, #0f1724 100%);color:#e6eef9}
+.dashboard-wrap{padding:24px}
+.card.card-dark{background:#0f1724;border:1px solid rgba(255,255,255,0.04);color:#e6eef9;border-radius:10px}
+.card.card-dark h5, .card.card-dark h6{color:#fff}
+.display-6{font-weight:600}
+.text-muted{color:rgba(230,238,249,0.6)!important}
+@media (max-width:767px){.dashboard-wrap{padding:12px}}
+
+/* Sidebar styles */
+.sidebar{background:#071022;color:#fff;border-right:1px solid rgba(255,255,255,0.03)}
+.sidebar-logo{width:72px;height:72px;object-fit:contain}
+.sidebar .nav-link{padding:10px 12px;border-radius:6px}
+.sidebar .nav-link.active{background:rgba(255,255,255,0.03);font-weight:600}
+.sidebar .nav-link:hover{background:rgba(255,255,255,0.02);color:#fff}
+
+/* Ensure main content has padding when sidebar present */
+main .dashboard-wrap{padding-left:28px;padding-right:28px}
+
+@media (max-width:991px){
+	.sidebar{min-height:auto;border-right:none}
+	main .dashboard-wrap{padding-left:12px;padding-right:12px}
+}
+
+/* Sticky navbar and sidebar */
+/* Navbar is sticky on all viewports so it remains visible while scrolling */
+.navbar{
+	position: sticky !important;
+	top: 0;
+	z-index: 1030; /* above content but below modals */
+}
+
+/* Sidebar becomes sticky on medium and larger screens (>=768px) */
+@media (min-width: 768px) {
+	.sidebar{
+		position: sticky;
+		top: 56px; /* sit below the navbar */
+		height: calc(100vh - 56px);
+		align-self: flex-start; /* ensure sticky positioning within column */
+		overflow-y: auto;
+		padding-bottom: 24px;
+	}
+
+	/* ensure main content doesn't overlap the navbar when fixed */
+	.dashboard-wrap{padding-top:20px}
+}
+
+/* Sidebar nav icons */
+.nav-icon{width:18px;height:18px;flex:0 0 18px;margin-right:8px;fill:currentColor}
+.nav-link{display:flex;align-items:center}
+
+/* Quick panels */
+.quick-panels .card{min-height:110px}
+.quick-panels .card h6{color:#fff}
+.quick-panels .card p{color:rgba(230,238,249,0.7)}
+.quick-panels .btn{margin-top:auto}
+
+/* Clients page tweaks */
+#clientsTable td{vertical-align:middle}
+.card.card-dark .form-label.small{font-size:0.85rem}
+.card.card-dark .form-control-sm{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);color:#fff}
+.card.card-dark .form-select-sm{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);color:#fff}
