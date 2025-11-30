@@ -53,7 +53,7 @@
         const res = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ name, metadata })
+          body: JSON.stringify({ name, metadata_json: metadata })
         });
         if(!res.ok){
           const txt = await res.text();

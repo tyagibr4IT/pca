@@ -4,18 +4,24 @@ from sqlalchemy import select, delete
 from app.db.database import get_db
 from app.models.models import Tenant
 from app.auth.jwt import get_current_user, require_role
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
 class ClientCreate(BaseModel):
     name: str
-    metadata_json: Optional[dict] = None
+    metadata_json: Optional[dict] = Field(None, alias="metadata")
+
+    class Config:
+        allow_population_by_field_name = True
 
 class ClientUpdate(BaseModel):
     name: Optional[str] = None
-    metadata_json: Optional[dict] = None
+    metadata_json: Optional[dict] = Field(None, alias="metadata")
+
+    class Config:
+        allow_population_by_field_name = True
 
 class ClientResponse(BaseModel):
     id: int
