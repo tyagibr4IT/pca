@@ -22,8 +22,11 @@ class User(Base):
     role = Column(String, default="member")  # super_admin / admin / member
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
+    # Optional assignment of a client (tenant) to a user for scoping
+    assigned_client_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)
 
-    tenant = relationship("Tenant")
+    tenant = relationship("Tenant", foreign_keys=[tenant_id])
+    assigned_client = relationship("Tenant", foreign_keys=[assigned_client_id])
 
 class CurrentMetric(Base):
     __tablename__ = "current_metrics"

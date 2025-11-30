@@ -1,46 +1,100 @@
 // clients-modal.js
-// Handles Add Client modal on dashboard (stores to localStorage for demo)
-document.addEventListener('DOMContentLoaded', () => {
+// Handles Add/Edit Client modal - integrates with backend API and test endpoint
+(function(){
+  const API_BASE = 'http://localhost:8000/api';
   const modalEl = document.getElementById('clientModal');
-  if(!modalEl) return; // nothing to do
-
-  const provider = document.getElementById('modalProvider');
-  const clientName = document.getElementById('modalClientName');
-  const clientId = document.getElementById('modalClientId');
-  const clientSecret = document.getElementById('modalClientSecret');
   const saveBtn = document.getElementById('modalSaveClient');
   const testBtn = document.getElementById('modalTestConn');
+  const providerSel = document.getElementById('modalProvider');
+  const clientNameEl = document.getElementById('modalClientName');
+  const tenantIdEl = document.getElementById('modalTenantId');
+  const tenantIdField = document.getElementById('tenantIdField');
+  const clientIdEl = document.getElementById('modalClientId');
+  const clientSecretEl = document.getElementById('modalClientSecret');
 
-  const bsModal = new bootstrap.Modal(modalEl);
-
-  function loadClients(){
-    try{ return JSON.parse(localStorage.getItem('clients')||'[]') }catch(e){return []}
+  function getToken(){
+    try { return localStorage.getItem('token'); } catch(e){ return null; }
   }
-  function saveClients(list){ localStorage.setItem('clients', JSON.stringify(list)) }
 
-  function resetForm(){ provider.value='aws'; clientName.value=''; clientId.value=''; clientSecret.value=''; }
+  function toggleAzureFields(){
+    if(!providerSel || !tenantIdField) return;
+    tenantIdField.style.display = providerSel.value === 'azure' ? 'block' : 'none';
+  }
 
-  saveBtn.addEventListener('click', () => {
-    if(!clientName.value.trim()){
-      alert('Please provide a name for the client.');
-      return;
-    }
-    const list = loadClients();
-    list.push({ provider: provider.value, name: clientName.value.trim(), clientId: clientId.value.trim(), clientSecret: clientSecret.value.trim() });
-    saveClients(list);
-    bsModal.hide();
-    resetForm();
-    // if on clients page, try to re-render table by dispatching an event
-    window.dispatchEvent(new Event('clients-updated'));
-  });
+  if(providerSel){
+    providerSel.addEventListener('change', toggleAzureFields);
+    toggleAzureFields();
+  }
 
-  testBtn.addEventListener('click', () => {
-    const old = testBtn.innerHTML;
-    testBtn.disabled = true;
-    testBtn.innerHTML = 'Testing...';
-    setTimeout(() => { testBtn.disabled = false; testBtn.innerHTML = old; alert('Connection appears valid (demo)'); }, 700);
-  });
+  if(saveBtn){
+    const newSave = saveBtn.cloneNode(true);
+    saveBtn.parentNode.replaceChild(newSave, saveBtn);
+    newSave.addEventListener('click', async function(){
+      const name = (clientNameEl?.value || '').trim();
+      const provider = providerSel?.value || '';
+      const tenantId = (tenantIdEl?.value || '').trim();
+      const clientId = (clientIdEl?.value || '').trim();
+      const clientSecret = (clientSecretEl?.value || '').trim();
+      if(!name){ alert('Client name is required'); return; }
+      if(!provider){ alert('Provider is required'); return; }
+      if(provider === 'azure' && !tenantId){ alert('Tenant ID is required for Azure'); return; }
+      if(!clientId || !clientSecret){ alert('Client ID and Secret are required'); return; }
 
-  // Clear form when modal hidden
-  modalEl.addEventListener('hidden.bs.modal', resetForm);
-});
+      const metadata = { provider, clientId, clientSecret };
+      if(provider === 'azure') metadata.tenantId = tenantId;
+
+      const token = getToken();
+      if(!token){ alert('Not authenticated'); return; }
+
+      try{
+        const id = window.editingClientId;
+        const url = id ? `${API_BASE}/clients/${id}` : `${API_BASE}/clients/`;
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ name, metadata })
+        });
+        if(!res.ok){
+          const txt = await res.text();
+          throw new Error(`Save failed: ${res.status} ${txt}`);
+        }
+        document.dispatchEvent(new CustomEvent('clients-updated'));
+        const bsModal = bootstrap.Modal.getInstance(modalEl);
+        if(bsModal) bsModal.hide();
+      } catch(err){
+        console.error('Error saving client', err);
+        alert('Error saving client: ' + (err.message || err));
+      }
+    });
+  }
+
+  if(testBtn){
+    const newTest = testBtn.cloneNode(true);
+    testBtn.parentNode.replaceChild(newTest, testBtn);
+    newTest.addEventListener('click', async function(){
+      const token = getToken();
+      if(!token){ alert('Not authenticated'); return; }
+      const id = window.editingClientId;
+      if(!id){
+        alert('Save the client first, then test the connection.');
+        return;
+      }
+      try{
+        const res = await fetch(`${API_BASE}/clients/${id}/test`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if(!res.ok){
+          throw new Error(data?.detail || `Test failed: ${res.status}`);
+        }
+        const msg = data.ok ? `Success: ${data.details || 'Credentials valid'}` : `Failed: ${data.details || 'Invalid credentials'}`;
+        alert(msg);
+      } catch(err){
+        console.error('Test connection error', err);
+        alert('Error testing connection: ' + (err.message || err));
+      }
+    });
+  }
+})();

@@ -54,35 +54,47 @@
     </div>
 
     <script>
-      // Simple demo handler: posts to /api/auth/login if available, otherwise mock
+      const API_BASE = 'http://localhost:8000/api';
+      
       document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const u = document.getElementById('username').value;
         const p = document.getElementById('password').value;
         const msg = document.getElementById('loginMsg');
+        const btn = document.getElementById('signinBtn');
+        
         msg.className = 'text-center text-warning';
         msg.textContent = 'Signing in...';
+        btn.disabled = true;
+        
         try{
-          const res = await fetch('/api/auth/login', {
+          const res = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({username: u, password: p})
           });
-            if(res.ok){
-            const j = await res.json();
+          
+          if(res.ok){
+            const data = await res.json();
             msg.className = 'text-center text-success';
-            msg.textContent = 'Signed in (demo).';
-            localStorage.setItem('token', j.access_token || 'demo-token');
-              setTimeout(()=> location.href = './dashboard.html', 700);
+            msg.textContent = 'Login successful!';
+            
+            // Store token and user info
+            localStorage.setItem('token', data.access_token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+            
+            setTimeout(()=> location.href = './dashboard.html', 500);
           } else {
+            const error = await res.json();
             msg.className = 'text-center text-danger';
-            msg.textContent = 'Invalid credentials';
+            msg.textContent = error.detail || 'Invalid credentials';
+            btn.disabled = false;
           }
         } catch(err){
-          msg.className = 'text-center text-info';
-          msg.textContent = 'Offline demo: accepting any credentials.';
-          localStorage.setItem('token', 'demo-token');
-          setTimeout(()=> location.href = './dashboard.html', 700);
+          console.error('Login error:', err);
+          msg.className = 'text-center text-danger';
+          msg.textContent = 'Connection error. Please check if backend is running.';
+          btn.disabled = false;
         }
       });
     </script>

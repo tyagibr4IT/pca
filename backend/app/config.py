@@ -5,6 +5,8 @@ from pydantic import BaseSettings, Field
 
 class Settings(BaseSettings):
     ENV: str = "development"
+    APP_HOST: str = "0.0.0.0"
+    APP_PORT: str = "8000"
     DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379/0"
     KEYVAULT_NAME: str = None
