@@ -7,20 +7,53 @@ from app.workers import fetcher
 import asyncio
 from app.db.run_migrations import run_migrations
 from app.middleware.jwt_middleware import JWTAuthMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Cloud Optimizer API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Global JWT authentication middleware - MUST be added before CORS
 app.add_middleware(JWTAuthMiddleware)
 
 # CORS configuration for frontend - MUST be after JWT middleware
+# Security: Restrict to known origins in production
+allowed_origins = [
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
+if settings.ENV == "development":
+    allowed_origins.append("*")  # Allow all in dev only
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    # Strict-Transport-Security: Force HTTPS in production
+    if settings.ENV != "development":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # Content-Security-Policy: Prevent XSS and injection attacks
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    # X-Frame-Options: Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+    # X-Content-Type-Options: Prevent MIME sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    # Referrer-Policy: Control referrer information
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Permissions-Policy: Restrict browser features
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return response
 
 app.include_router(auth_routes.router, prefix="/api")
 app.include_router(metrics_routes.router, prefix="/api")

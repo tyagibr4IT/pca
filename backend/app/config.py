@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     AZURE_AD_CLIENT_ID: str = None
     AZURE_AD_CLIENT_SECRET: str = None
 
-    JWT_SECRET: str = Field(default="change-me", env="JWT_SECRET")
+    # SECURITY WARNING: Set a strong random JWT_SECRET in production .env file!
+    # Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
+    JWT_SECRET: str = Field(default="change-me-insecure-default", env="JWT_SECRET")
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
