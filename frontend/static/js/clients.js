@@ -39,6 +39,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const clientName = document.getElementById('modalClientName');
   const tenantId = document.getElementById('modalTenantId');
   const tenantIdField = document.getElementById('tenantIdField');
+  const subscriptionId = document.getElementById('modalSubscriptionId');
+  const subscriptionIdField = document.getElementById('subscriptionIdField');
+  const resourceGroup = document.getElementById('modalResourceGroup');
+  const resourceGroupField = document.getElementById('resourceGroupField');
   const clientId = document.getElementById('modalClientId');
   const clientSecret = document.getElementById('modalClientSecret');
 
@@ -79,6 +83,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       clients = await response.json();
       console.log('Loaded clients from API:', clients);
+      // Log Azure clients specifically to verify metadata
+      clients.filter(c => c.metadata_json?.provider === 'azure').forEach(c => {
+        console.log(`Azure client ${c.name} (ID: ${c.id}) metadata:`, c.metadata_json);
+      });
       return clients;
     } catch (error) {
       console.error('Error loading clients:', error);
@@ -186,9 +194,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function reset(){
     if(document.getElementById('modalClientForm')) document.getElementById('modalClientForm').reset();
+    // Clear Azure-specific fields
+    if(tenantId) tenantId.value = '';
+    if(subscriptionId) subscriptionId.value = '';
+    if(resourceGroup) resourceGroup.value = '';
     window.editingClientId = null;
     const modalTitle = document.getElementById('clientModalLabel');
     if(modalTitle) modalTitle.textContent = 'Add Client';
+    // Reset provider to default and trigger field visibility
+    if(provider) provider.value = 'aws';
+    if(window.toggleAzureModalFields) window.toggleAzureModalFields();
   }
 
   table.addEventListener('click', async (e) => {
@@ -201,18 +216,31 @@ document.addEventListener('DOMContentLoaded', async () => {
       const client = clients.find(c => c.id === id);
       if (!client) return;
       
+      console.log('Editing client:', client);
       const meta = client.metadata_json || {};
       if(provider) provider.value = meta.provider || 'aws';
       if(clientName) clientName.value = client.name;
       if(clientId) clientId.value = meta.clientId || '';
       if(clientSecret) clientSecret.value = meta.clientSecret || '';
       
-      // Handle Azure tenant ID
-      if(meta.provider === 'azure' && tenantId && tenantIdField) {
+      // Handle Azure fields
+      if(tenantId) {
         tenantId.value = meta.tenantId || '';
-        tenantIdField.style.display = 'block';
-      } else if(tenantIdField) {
-        tenantIdField.style.display = 'none';
+        console.log('Set tenantId field to:', tenantId.value);
+      }
+      if(subscriptionId) {
+        subscriptionId.value = meta.subscriptionId || '';
+        console.log('Set subscriptionId field to:', subscriptionId.value, '(from meta:', meta.subscriptionId, ')');
+      }
+      if(resourceGroup) {
+        resourceGroup.value = meta.resourceGroup || '';
+        console.log('Set resourceGroup field to:', resourceGroup.value);
+      }
+      console.log('All Azure fields populated - tenantId:', meta.tenantId, 'subscriptionId:', meta.subscriptionId, 'resourceGroup:', meta.resourceGroup);
+      
+      // Trigger field visibility toggle based on provider
+      if(window.toggleAzureModalFields) {
+        setTimeout(() => window.toggleAzureModalFields(), 10);
       }
       
       window.editingClientId = id;
@@ -229,8 +257,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       const providerName = (meta.provider || 'aws').toUpperCase();
       let details = `Client Details:\n\nName: ${client.name}\nProvider: ${providerName}\n`;
       
-      if (meta.provider === 'azure' && meta.tenantId) {
-        details += `Tenant ID: ${meta.tenantId}\n`;
+      if (meta.provider === 'azure') {
+        details += `Tenant ID: ${meta.tenantId || 'N/A'}\n`;
+        details += `Subscription ID: ${meta.subscriptionId || 'N/A'}\n`;
+        details += `Resource Group: ${meta.resourceGroup || 'N/A'}\n`;
       }
       
       details += `Client ID: ${meta.clientId || 'N/A'}\nCreated: ${client.created_at || 'N/A'}`;

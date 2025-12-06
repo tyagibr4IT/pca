@@ -2,7 +2,7 @@ fastapi==0.110.0
 uvicorn[standard]==0.23.0
 python-jose==3.4.0
 bcrypt>=4.0.0
-msal==1.23.0
+msal>=1.24.0
 httpx==0.24.0
 sqlalchemy[asyncio]==2.0.23
 asyncpg==0.28.0
@@ -18,3 +18,14 @@ redis==4.5.4
 python-dotenv==1.1.0
 websockets==12.0
 slowapi==0.1.9
+azure-mgmt-compute==30.0.0
+azure-mgmt-storage==21.0.0
+azure-mgmt-sql==3.0.1
+azure-mgmt-resource==23.0.0
+azure-identity==1.15.0
+boto3
+google-auth
+google-auth-oauthlib
+google-cloud-compute
+google-cloud-storage
+google-cloud-sqlcommenter

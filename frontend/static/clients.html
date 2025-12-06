@@ -135,6 +135,16 @@
                 <input id="modalTenantId" class="form-control form-control-sm" placeholder="Azure Tenant/Directory ID" />
                 <small class="text-muted">Required for Azure only</small>
               </div>
+              <div class="mb-2" id="subscriptionIdField" style="display: none;">
+                <label class="form-label small">Subscription ID</label>
+                <input id="modalSubscriptionId" class="form-control form-control-sm" placeholder="Azure Subscription ID" />
+                <small class="text-muted">Required for Azure</small>
+              </div>
+              <div class="mb-2" id="resourceGroupField" style="display: none;">
+                <label class="form-label small">Resource Group (optional)</label>
+                <input id="modalResourceGroup" class="form-control form-control-sm" placeholder="Azure Resource Group name (optional)" />
+                <small class="text-muted">If provided, queries are scoped to this RG</small>
+              </div>
               <div class="mb-2">
                 <label class="form-label small" id="clientIdLabel">Client ID / Access Key</label>
                 <input id="modalClientId" class="form-control form-control-sm" placeholder="(masked when saved)" />

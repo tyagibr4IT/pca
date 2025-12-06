@@ -132,30 +132,57 @@ async def test_client_connection(client_id: int, db: AsyncSession = Depends(get_
             return ConnectionTestResponse(ok=True, provider=provider, details="AWS credentials present")
         return ConnectionTestResponse(ok=False, provider=provider, details="Missing clientId/clientSecret for AWS")
     elif provider == "azure":
-        if not (meta.get("tenantId") and meta.get("clientId") and meta.get("clientSecret")):
-            return ConnectionTestResponse(ok=False, provider=provider, details="Missing tenantId/clientId/clientSecret for Azure")
-        # Attempt an actual client credentials token acquisition against Azure AD
-        try:
-            import msal
-        except ImportError:
-            return ConnectionTestResponse(ok=False, provider=provider, details="msal not installed on server")
-
         tenant_id = meta.get("tenantId")
         client_id = meta.get("clientId")
         client_secret = meta.get("clientSecret")
+        subscription_id = meta.get("subscriptionId")
+        resource_group = meta.get("resourceGroup")
+        
+        if not (tenant_id and client_id and client_secret and subscription_id):
+            return ConnectionTestResponse(ok=False, provider=provider, details="Missing tenantId/clientId/clientSecret/subscriptionId for Azure")
+        
+        # Attempt token acquisition and optional resource group validation
+        try:
+            import msal
+            from azure.identity import ClientSecretCredential
+            from azure.mgmt.resource import ResourceManagementClient
+            from azure.core.exceptions import HttpResponseError
+        except ImportError as e:
+            return ConnectionTestResponse(ok=False, provider=provider, details=f"Azure SDK not installed: {e}")
+
         authority = f"https://login.microsoftonline.com/{tenant_id}"
-        # Using Microsoft Graph default scope for client credentials
+        # First, verify MSAL token acquisition
         app = msal.ConfidentialClientApplication(
             client_id,
             authority=authority,
             client_credential=client_secret,
         )
-        # Acquire token for client using .default scope
-        result_token = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])  # type: ignore
-        if result_token and result_token.get("access_token"):
-            return ConnectionTestResponse(ok=True, provider=provider, details="Azure token acquisition succeeded")
-        err = result_token.get("error_description") if isinstance(result_token, dict) else "Unknown error"
-        return ConnectionTestResponse(ok=False, provider=provider, details=f"Azure token acquisition failed: {err}")
+        result_token = app.acquire_token_for_client(scopes=["https://management.azure.com/.default"])  # type: ignore
+        if not result_token or not result_token.get("access_token"):
+            err = result_token.get("error_description") if isinstance(result_token, dict) else "Unknown error"
+            return ConnectionTestResponse(ok=False, provider=provider, details=f"Azure token acquisition failed: {err}")
+        
+        # Verify subscription access
+        try:
+            credential = ClientSecretCredential(tenant_id, client_id, client_secret)
+            resource_client = ResourceManagementClient(credential, subscription_id)
+            # Try to get subscription to confirm access
+            sub = resource_client.subscriptions.get(subscription_id)
+            details = f"Azure validated: subscription {sub.display_name}"
+            
+            # If resource group provided, verify it exists
+            if resource_group:
+                try:
+                    rg = resource_client.resource_groups.get(resource_group)
+                    details += f", resource group {rg.name} found"
+                except HttpResponseError:
+                    return ConnectionTestResponse(ok=False, provider=provider, details=f"Resource group '{resource_group}' not found in subscription")
+            
+            return ConnectionTestResponse(ok=True, provider=provider, details=details)
+        except HttpResponseError as e:
+            return ConnectionTestResponse(ok=False, provider=provider, details=f"Azure subscription/RG check failed: {e.message}")
+        except Exception as e:
+            return ConnectionTestResponse(ok=False, provider=provider, details=f"Azure validation error: {str(e)}")
     elif provider == "gcp":
         if meta.get("clientId") and meta.get("clientSecret"):
             return ConnectionTestResponse(ok=True, provider=provider, details="GCP credentials present")
