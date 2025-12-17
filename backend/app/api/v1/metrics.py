@@ -299,7 +299,7 @@ async def fetch_gcp_resources(client_id: int, credentials: dict):
             return {"vms": [], "databases": [], "storage": [], "error": "Missing GCP projectId"}
 
         if sa_json:
-            info = json.loads(sa_json)
+            info = json.loads(sa_json) if isinstance(sa_json, str) else sa_json
             creds = service_account.Credentials.from_service_account_info(info)
         elif sa_path and os.path.exists(sa_path):
             creds = service_account.Credentials.from_service_account_file(sa_path)
@@ -334,9 +334,9 @@ async def fetch_gcp_resources(client_id: int, credentials: dict):
         except Exception as e:
             print(f"Error fetching GCP Storage buckets: {e}")
 
-            # Cloud SQL listing could be added via googleapiclient; omitted for brevity
-            databases = []
-            return {"vms": vms, "databases": databases, "storage": storage_items}
+        # Cloud SQL listing could be added via googleapiclient; omitted for brevity
+        databases = []
+        return {"vms": vms, "databases": databases, "storage": storage_items}
     except Exception as e:
         print(f"Error in fetch_gcp_resources: {e}")
         return {"vms": [], "databases": [], "storage": [], "error": str(e)}

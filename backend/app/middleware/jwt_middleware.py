@@ -13,6 +13,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     
     # Paths that don't require authentication
     WHITELIST = [
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
         "/api/auth/login",
         "/api/auth/register",
         "/docs",

@@ -184,8 +184,36 @@ async def test_client_connection(client_id: int, db: AsyncSession = Depends(get_
         except Exception as e:
             return ConnectionTestResponse(ok=False, provider=provider, details=f"Azure validation error: {str(e)}")
     elif provider == "gcp":
-        if meta.get("clientId") and meta.get("clientSecret"):
+        # GCP can either have serviceAccountJson or clientId/clientSecret
+        service_account_json = meta.get("serviceAccountJson")
+        project_id = meta.get("projectId")
+        
+        if service_account_json:
+            # Validate service account JSON
+            try:
+                import json
+                from google.oauth2 import service_account
+                
+                if isinstance(service_account_json, str):
+                    sa_data = json.loads(service_account_json)
+                else:
+                    sa_data = service_account_json
+                
+                # Verify required fields
+                required_fields = ["type", "project_id", "private_key", "client_email"]
+                if not all(f in sa_data for f in required_fields):
+                    return ConnectionTestResponse(ok=False, provider=provider, details="Invalid GCP service account JSON: missing required fields")
+                
+                # Try to create credentials to validate the key
+                credentials = service_account.Credentials.from_service_account_info(sa_data)
+                return ConnectionTestResponse(ok=True, provider=provider, details=f"GCP service account validated: {sa_data.get('client_email')}")
+            except json.JSONDecodeError:
+                return ConnectionTestResponse(ok=False, provider=provider, details="Invalid GCP service account JSON format")
+            except Exception as e:
+                return ConnectionTestResponse(ok=False, provider=provider, details=f"GCP validation error: {str(e)}")
+        elif meta.get("clientId") and meta.get("clientSecret"):
             return ConnectionTestResponse(ok=True, provider=provider, details="GCP credentials present")
-        return ConnectionTestResponse(ok=False, provider=provider, details="Missing clientId/clientSecret for GCP")
+        else:
+            return ConnectionTestResponse(ok=False, provider=provider, details="Missing GCP serviceAccountJson or clientId/clientSecret")
     else:
         return ConnectionTestResponse(ok=False, provider=provider, details="Unknown or unset provider")

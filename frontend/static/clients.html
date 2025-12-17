@@ -145,11 +145,22 @@
                 <input id="modalResourceGroup" class="form-control form-control-sm" placeholder="Azure Resource Group name (optional)" />
                 <small class="text-muted">If provided, queries are scoped to this RG</small>
               </div>
-              <div class="mb-2">
+              <div class="mb-2" id="gcpJsonField" style="display: none;">
+                <label class="form-label small">GCP Service Account JSON</label>
+                <input id="modalGcpJsonFile" type="file" class="form-control form-control-sm" accept=".json" />
+                <small class="text-muted">Upload your GCP service account JSON file</small>
+                <div id="gcpJsonPreview" class="mt-2 small text-success" style="display: none;"></div>
+              </div>
+              <div class="mb-2" id="projectIdField" style="display: none;">
+                <label class="form-label small">GCP Project ID</label>
+                <input id="modalProjectId" class="form-control form-control-sm" placeholder="GCP Project ID (auto-filled from JSON)" readonly />
+                <small class="text-muted">Auto-populated from JSON file</small>
+              </div>
+              <div class="mb-2" id="awsAwsField">
                 <label class="form-label small" id="clientIdLabel">Client ID / Access Key</label>
                 <input id="modalClientId" class="form-control form-control-sm" placeholder="(masked when saved)" />
               </div>
-              <div class="mb-2">
+              <div class="mb-2" id="awsSecretField">
                 <label class="form-label small">Client Secret / Secret Key</label>
                 <input id="modalClientSecret" class="form-control form-control-sm" placeholder="(masked when saved)" />
               </div>
