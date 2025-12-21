@@ -334,8 +334,35 @@ async def fetch_gcp_resources(client_id: int, credentials: dict):
         except Exception as e:
             print(f"Error fetching GCP Storage buckets: {e}")
 
-        # Cloud SQL listing could be added via googleapiclient; omitted for brevity
+        # Cloud SQL instances
         databases = []
+        try:
+            # Prefer built-in sqladmin client if available; fall back to discovery
+            try:
+                from google.cloud import sql_v1
+                sql_client = sql_v1.SqlInstancesServiceClient(credentials=creds)
+                request = sql_v1.SqlInstancesListRequest(project=project)
+                resp = sql_client.list(request=request)
+                instances = getattr(resp, "items", []) or []
+            except ImportError:
+                from googleapiclient.discovery import build  # type: ignore
+                sql_client = build("sqladmin", "v1beta4", credentials=creds, cache_discovery=False)
+                req = sql_client.instances().list(project=project)
+                resp = req.execute()
+                instances = resp.get("items", []) if resp else []
+
+            for inst in instances:
+                databases.append({
+                    "id": inst.get("name"),
+                    "engine": inst.get("databaseVersion"),
+                    "tier": inst.get("settings", {}).get("tier"),
+                    "region": inst.get("region"),
+                    "state": inst.get("state"),
+                    "storage_gb": inst.get("settings", {}).get("dataDiskSizeGb"),
+                })
+        except Exception as e:
+            print(f"Error fetching GCP Cloud SQL: {e}")
+
         return {"vms": vms, "databases": databases, "storage": storage_items}
     except Exception as e:
         print(f"Error in fetch_gcp_resources: {e}")

@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Simple session guard: only allow login page without token
   try {
     const path = (location.pathname || '').toLowerCase();
-    const isLoginPage = path.endsWith('/login.html') || path.endsWith('login.html');
+    const isLoginPage = /\/login(\.html)?\/?$/.test(path);
     const token = localStorage.getItem('token');
     if (!isLoginPage && !token) {
       // Not on login and no session -> redirect
