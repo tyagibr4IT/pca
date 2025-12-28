@@ -1,0 +1,101 @@
+﻿{
+    "client_id":  13,
+    "client_name":  "GCP_test",
+    "provider":  "gcp",
+    "resources":  {
+                      "compute":  {
+                                      "instances":  [
+                                                        {
+                                                            "id":  "instance-20251216-101204",
+                                                            "type":  "e2-micro",
+                                                            "state":  "RUNNING",
+                                                            "zone":  "zones/us-central1-a",
+                                                            "cpu_platform":  "Intel Broadwell"
+                                                        },
+                                                        {
+                                                            "id":  "instance-20251217-120400",
+                                                            "type":  "e2-micro",
+                                                            "state":  "RUNNING",
+                                                            "zone":  "zones/us-central1-c",
+                                                            "cpu_platform":  "Intel Broadwell"
+                                                        }
+                                                    ],
+                                      "images":  [
+
+                                                 ]
+                                  },
+                      "database":  {
+                                       "cloud_sql":  [
+
+                                                     ],
+                                       "firestore":  [
+
+                                                     ],
+                                       "bigtable":  [
+
+                                                    ]
+                                   },
+                      "storage":  {
+                                      "buckets":  [
+                                                      {
+                                                          "bucket":  "testdevstorageai",
+                                                          "location":  "US-EAST1",
+                                                          "storage_class":  "STANDARD"
+                                                      }
+                                                  ]
+                                  },
+                      "networking":  {
+                                         "networks":  [
+                                                          {
+                                                              "id":  "default",
+                                                              "auto_create_subnetworks":  true,
+                                                              "ipv4_range":  null
+                                                          }
+                                                      ],
+                                         "firewalls":  [
+                                                           {
+                                                               "name":  "default-allow-icmp",
+                                                               "direction":  "INGRESS",
+                                                               "priority":  65534
+                                                           },
+                                                           {
+                                                               "name":  "default-allow-internal",
+                                                               "direction":  "INGRESS",
+                                                               "priority":  65534
+                                                           },
+                                                           {
+                                                               "name":  "default-allow-rdp",
+                                                               "direction":  "INGRESS",
+                                                               "priority":  65534
+                                                           },
+                                                           {
+                                                               "name":  "default-allow-ssh",
+                                                               "direction":  "INGRESS",
+                                                               "priority":  65534
+                                                           }
+                                                       ]
+                                     },
+                      "analytics":  {
+                                        "bigquery":  [
+
+                                                     ]
+                                    },
+                      "messaging":  {
+                                        "pubsub":  [
+
+                                                   ]
+                                    }
+                  },
+    "summary":  {
+                    "compute_instances":  2,
+                    "compute_images":  0,
+                    "database_cloud_sql":  0,
+                    "database_firestore":  0,
+                    "database_bigtable":  0,
+                    "storage_buckets":  1,
+                    "networking_networks":  1,
+                    "networking_firewalls":  4,
+                    "analytics_bigquery":  0,
+                    "messaging_pubsub":  0
+                }
+}

@@ -1,0 +1,88 @@
+﻿{
+    "client_id":  12,
+    "client_name":  "DOP_test",
+    "provider":  "azure",
+    "resources":  {
+                      "compute":  {
+                                      "vm":  [
+                                                 {
+                                                     "id":  "resourcetest",
+                                                     "size":  "Standard_D2s_v3",
+                                                     "state":  "deallocated",
+                                                     "location":  "eastus",
+                                                     "resource_group":  "DEMOLINUX1_GROUP"
+                                                 }
+                                             ],
+                                      "app_service":  [
+
+                                                      ],
+                                      "aks":  [
+
+                                              ]
+                                  },
+                      "database":  {
+                                       "sql":  [
+
+                                               ],
+                                       "cosmos":  [
+
+                                                  ],
+                                       "mysql":  [
+
+                                                 ]
+                                   },
+                      "storage":  {
+                                      "storage_account":  [
+
+                                                          ],
+                                      "blob":  [
+
+                                               ]
+                                  },
+                      "networking":  {
+                                         "vnet":  [
+                                                      {
+                                                          "id":  "resourcetest-vnet",
+                                                          "address_space":  [
+                                                                                "10.0.0.0/16"
+                                                                            ],
+                                                          "location":  "eastus",
+                                                          "resource_group":  "demolinux1_group"
+                                                      }
+                                                  ],
+                                         "nsg":  [
+                                                     {
+                                                         "id":  "resourcetest-nsg",
+                                                         "location":  "eastus",
+                                                         "resource_group":  "demolinux1_group"
+                                                     }
+                                                 ],
+                                         "lb":  [
+
+                                                ]
+                                     },
+                      "security":  {
+                                       "key_vault":  [
+
+                                                     ],
+                                       "managed_identity":  [
+
+                                                            ]
+                                   }
+                  },
+    "summary":  {
+                    "compute_vm":  1,
+                    "compute_app_service":  0,
+                    "compute_aks":  0,
+                    "database_sql":  0,
+                    "database_cosmos":  0,
+                    "database_mysql":  0,
+                    "storage_storage_account":  0,
+                    "storage_blob":  0,
+                    "networking_vnet":  1,
+                    "networking_nsg":  1,
+                    "networking_lb":  0,
+                    "security_key_vault":  0,
+                    "security_managed_identity":  0
+                }
+}

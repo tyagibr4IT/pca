@@ -1,0 +1,111 @@
+﻿{
+    "client_id":  4,
+    "client_name":  "HLLMMu",
+    "provider":  "aws",
+    "resources":  {
+                      "compute":  {
+                                      "ec2":  [
+                                                  {
+                                                      "id":  "i-040541263b7863aba",
+                                                      "type":  "t2.nano",
+                                                      "state":  "stopped",
+                                                      "region":  "us-east-1",
+                                                      "launch_time":  "2025-12-11T04:32:36+00:00"
+                                                  }
+                                              ],
+                                      "asg":  [
+
+                                              ],
+                                      "lambda":  [
+
+                                                 ],
+                                      "ecs":  [
+
+                                              ],
+                                      "eks":  [
+
+                                              ]
+                                  },
+                      "database":  {
+                                       "rds":  [
+                                                   {
+                                                       "id":  "database-1-instance-1",
+                                                       "engine":  "aurora-postgresql",
+                                                       "size":  "db.serverless",
+                                                       "storage_gb":  1,
+                                                       "region":  "us-east-1",
+                                                       "status":  "available"
+                                                   }
+                                               ],
+                                       "dynamodb":  [
+
+                                                    ],
+                                       "elasticache":  [
+
+                                                       ]
+                                   },
+                      "storage":  {
+                                      "s3":  [
+                                                 {
+                                                     "bucket":  "devopstestnewmachine",
+                                                     "region":  "us-east-1"
+                                                 }
+                                             ],
+                                      "ebs":  [
+                                                  {
+                                                      "id":  "vol-0b4bd960fc7ced83f",
+                                                      "size_gb":  8,
+                                                      "type":  "gp3",
+                                                      "state":  "in-use",
+                                                      "region":  "us-east-1"
+                                                  }
+                                              ]
+                                  },
+                      "networking":  {
+                                         "vpc":  [
+                                                     {
+                                                         "id":  "vpc-013993996f5216783",
+                                                         "cidr":  "172.31.0.0/16"
+                                                     }
+                                                 ],
+                                         "sg":  [
+                                                    {
+                                                        "id":  "sg-0ffb5ce7777980949",
+                                                        "name":  "default"
+                                                    }
+                                                ],
+                                         "elb":  [
+
+                                                 ],
+                                         "cloudfront":  [
+
+                                                        ]
+                                     },
+                      "security":  {
+                                       "iam":  [
+
+                                               ],
+                                       "kms":  [
+
+                                               ]
+                                   }
+                  },
+    "summary":  {
+                    "compute_ec2":  1,
+                    "compute_asg":  0,
+                    "compute_lambda":  0,
+                    "compute_ecs":  0,
+                    "compute_eks":  0,
+                    "database_rds":  1,
+                    "database_dynamodb":  0,
+                    "database_elasticache":  0,
+                    "storage_s3":  1,
+                    "storage_ebs":  1,
+                    "networking_vpc":  1,
+                    "networking_sg":  1,
+                    "networking_elb":  0,
+                    "networking_cloudfront":  0,
+                    "security_iam":  0,
+                    "security_kms":  0
+                }
+}

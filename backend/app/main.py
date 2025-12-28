@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import auth as auth_routes, metrics as metrics_routes, clients as clients_routes, users as users_routes, chat as chat_routes
 from app.config import settings
 from app.workers import fetcher
+from app.workers.snapshot_scheduler import start_snapshot_scheduler
 import asyncio
 from app.db.run_migrations import run_migrations
 from app.middleware.jwt_middleware import JWTAuthMiddleware
@@ -71,6 +72,8 @@ async def startup_event():
         return [{"tenant_id":1,"config":{"aws":True,"azure":True,"gcp":True}}]
     loop = asyncio.get_event_loop()
     loop.create_task(fetcher.scheduler_loop(get_tenant_configs))
+    # Start periodic snapshot scheduler (every 1 hour)
+    loop.create_task(start_snapshot_scheduler())
 
 if __name__ == "__main__":
     uvicorn.run(app, host=settings.APP_HOST, port=int(settings.APP_PORT))

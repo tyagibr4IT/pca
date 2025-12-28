@@ -24,8 +24,16 @@ azure-mgmt-sql==3.0.1
 azure-mgmt-resource==23.0.0
 azure-identity==1.15.0
 boto3
+azure-mgmt-network==22.0.0
+azure-mgmt-keyvault==11.0.0
+azure-mgmt-containerservice==17.0.0
+azure-mgmt-web==5.0.0
+boto3
+boto3
 google-auth
 google-auth-oauthlib
 google-cloud-compute
 google-cloud-storage
 google-cloud-sqlcommenter
+google-cloud-bigquery
+google-cloud-pubsub

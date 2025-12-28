@@ -1,11 +1,32 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Metrics — Cloud Optimizer</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Resources - Metrics</title>
     <link href="./vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="./css/dashboard.css" rel="stylesheet">
+    <style>
+        .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #495057; flex-wrap: wrap; }
+        .tab { padding: 12px 20px; background: transparent; border: none; cursor: pointer; color: #adb5bd; font-weight: 500; border-bottom: 3px solid transparent; }
+        .tab.active { color: #0d6efd; border-bottom-color: #0d6efd; }
+        .tab:hover { color: #adb5bd; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .resource-card { background: #212529; border: 1px solid #495057; border-radius: 8px; padding: 20px; }
+        .resource-card h5 { margin-top: 0; color: #fff; margin-bottom: 15px; word-break: break-word; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .resource-card p { margin: 8px 0; color: #adb5bd; font-size: 13px; }
+        .resource-card .label { font-weight: bold; color: #e9ecef; }
+        .resource-card.stopped { border-left: 4px solid #dc3545; opacity: 0.8; }
+        .resource-card.unused { border-left: 4px solid #ffc107; opacity: 0.8; }
+        .badge-stopped { background: #dc3545; color: white; font-size: 11px; padding: 3px 8px; border-radius: 3px; font-weight: bold; }
+        .badge-unused { background: #ffc107; color: #000; font-size: 11px; padding: 3px 8px; border-radius: 3px; font-weight: bold; }
+        .filter-controls { margin: 20px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .filter-controls label { margin: 0; display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer; }
+        .empty-state { text-align: center; padding: 40px; color: #6c757d; }
+        .section-title { font-size: 16px; font-weight: bold; color: #e9ecef; margin: 25px 0 15px 0; padding-bottom: 10px; border-bottom: 1px solid #495057; }
+    </style>
   </head>
   <body class="bg-dark-login">
     <nav class="navbar navbar-dark bg-dark px-3">
@@ -67,114 +88,72 @@
           <div class="container-fluid dashboard-wrap">
             <div class="row mt-4">
               <div class="col-12">
-                <h3 id="metricsTitle" class="text-white">Metrics</h3>
-                <p id="metricsSub" class="text-muted">Loading client details…</p>
-                  <div id="clientInfo" class="mb-2"></div>
-                  <div id="metricsContent" class="mb-3"></div>
-              </div>
-            </div>
-
-            <div class="row g-3 quick-panels mt-3">
-              <div class="col-6 col-md-4">
-                <div class="card card-dark p-3">
-                  <h6 class="mb-1">CPU Usage</h6>
-                  <p id="metricCpuTop" class="display-6 mb-0">27.4%</p>
+                <h3 class="text-white">Cloud Resources</h3>
+                <p class="text-muted" id="clientInfo">Loading resources...</p>
+                <div class="filter-controls">
+                  <button class="btn btn-sm btn-outline-light" onclick="loadResources()">Refresh</button>
+                  <button class="btn btn-sm btn-outline-light ms-2" onclick="window.location.href='/clients.html'">Back to Clients</button>
+                  <label class="text-muted" style="font-size: 14px;">
+                    <input type="checkbox" id="showStoppedFilter" checked onchange="applyFilters()" />
+                    Show Stopped/Deallocated
+                  </label>
+                  <label class="text-muted" style="font-size: 14px;">
+                    <input type="checkbox" id="showUnusedFilter" checked onchange="applyFilters()" />
+                    Show Unused
+                  </label>
                 </div>
-              </div>
-              <div class="col-6 col-md-4">
-                <div class="card card-dark p-3">
-                  <h6 class="mb-1">Memory (MB)</h6>
-                  <p id="metricMemTop" class="display-6 mb-0">2,048 MB</p>
-                </div>
-              </div>
-              <div class="col-6 col-md-4">
-                <div class="card card-dark p-3">
-                  <h6 class="mb-1">Errors / min</h6>
-                  <p id="metricErrTop" class="display-6 mb-0">1 /min</p>
-                </div>
-              </div>
-            </div>
 
-            <div class="row mt-3">
-              <div class="col-12">
-                <div class="row g-3 quick-panels">
-                  <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card card-dark p-3">
-                      <h6 class="mb-1">VMs</h6>
-                      <p id="metricVMs" class="display-6 mb-0">12</p>
-                        <canvas id="chartVMs" width="140" height="40" class="w-100 mt-2"></canvas>
-                    </div>
-                  </div>
-                  <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card card-dark p-3">
-                      <h6 class="mb-1">Databases</h6>
-                      <p id="metricDBs" class="display-6 mb-0">3</p>
-                        <canvas id="chartDBs" width="140" height="40" class="w-100 mt-2"></canvas>
-                    </div>
-                  </div>
-                  <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card card-dark p-3">
-                      <h6 class="mb-1">Storage (GB)</h6>
-                      <p id="metricStorage" class="display-6 mb-0">1,200 GB</p>
-                        <canvas id="chartStorage" width="140" height="40" class="w-100 mt-2"></canvas>
-                    </div>
-                  </div>
-                  <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card card-dark p-3">
-                      <h6 class="mb-1">Network (Mbps)</h6>
-                      <p id="metricNet" class="display-6 mb-0">120 Mbps</p>
-                        <canvas id="chartNet" width="140" height="40" class="w-100 mt-2"></canvas>
-                    </div>
-                  </div>
-
-                  <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card card-dark p-3">
-                      <h6 class="mb-1">CPU Usage</h6>
-                      <p id="metricCpu" class="display-6 mb-0">27.4%</p>
-                        <canvas id="chartCpu" width="140" height="40" class="w-100 mt-2"></canvas>
-                    </div>
-                  </div>
-                  <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card card-dark p-3">
-                      <h6 class="mb-1">Memory (MB)</h6>
-                      <p id="metricMem" class="display-6 mb-0">2,048 MB</p>
-                        <canvas id="chartMem" width="140" height="40" class="w-100 mt-2"></canvas>
-                    </div>
-                  </div>
-                  <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card card-dark p-3">
-                      <h6 class="mb-1">Errors / min</h6>
-                      <p id="metricErr" class="display-6 mb-0">1 /min</p>
-                        <canvas id="chartErr" width="140" height="40" class="w-100 mt-2"></canvas>
-                    </div>
-                  </div>
-                  <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card card-dark p-3">
-                      <h6 class="mb-1">Active Alerts</h6>
-                      <p id="metricAlerts" class="display-6 mb-0">2</p>
-                        <canvas id="chartAlerts" width="140" height="40" class="w-100 mt-2"></canvas>
-                    </div>
-                  </div>
+                <div id="loading" style="display: none; margin: 20px 0;">
+                  <span class="spinner-border spinner-border-sm text-light me-2"></span>
+                  <span class="text-light">Loading resources...</span>
                 </div>
-              </div>
-            </div>
 
-            <div class="row mt-2">
-              <div class="col-12">
-                <div class="card card-dark p-3">
-                  <h5 class="mb-2">Metrics (sample)</h5>
-                  <div class="table-responsive">
-                    <table class="table table-dark table-sm align-middle mb-0">
-                      <thead>
-                        <tr>
-                          <th>Timestamp</th>
-                          <th>Metric</th>
-                          <th>Value</th>
-                        </tr>
-                      </thead>
-                      <tbody id="metricsTable"></tbody>
-                    </table>
-                  </div>
+                <div id="error" style="display: none; margin: 20px 0;" class="alert alert-danger"></div>
+
+                <!-- Tabs -->
+                <div class="tabs">
+                  <button class="tab active" onclick="switchTab(event, 'compute')">Compute</button>
+                  <button class="tab" onclick="switchTab(event, 'database')">Database</button>
+                  <button class="tab" onclick="switchTab(event, 'storage')">Storage</button>
+                  <button class="tab" onclick="switchTab(event, 'networking')">Networking</button>
+                  <button class="tab" onclick="switchTab(event, 'security')">Security</button>
+                  <button class="tab" onclick="switchTab(event, 'analytics')">Analytics</button>
+                  <button class="tab" onclick="switchTab(event, 'messaging')">Messaging</button>
+                </div>
+
+                <!-- Compute Resources -->
+                <div id="compute" class="tab-content active">
+                  <div id="compute-content"></div>
+                </div>
+
+                <!-- Database Resources -->
+                <div id="database" class="tab-content">
+                  <div id="database-content"></div>
+                </div>
+
+                <!-- Storage Resources -->
+                <div id="storage" class="tab-content">
+                  <div id="storage-content"></div>
+                </div>
+
+                <!-- Networking Resources -->
+                <div id="networking" class="tab-content">
+                  <div id="networking-content"></div>
+                </div>
+
+                <!-- Security Resources -->
+                <div id="security" class="tab-content">
+                  <div id="security-content"></div>
+                </div>
+
+                <!-- Analytics Resources -->
+                <div id="analytics" class="tab-content">
+                  <div id="analytics-content"></div>
+                </div>
+
+                <!-- Messaging Resources -->
+                <div id="messaging" class="tab-content">
+                  <div id="messaging-content"></div>
                 </div>
               </div>
             </div>
@@ -185,8 +164,198 @@
 
     <script src="./vendor/bootstrap/bootstrap.bundle.min.js"></script>
     <script src="./js/common.js"></script>
-    <!-- Chart.js for inline sparklines (local vendored UMD build) -->
-    <script src="./vendor/chartjs/chart.umd.min.js"></script>
-    <script src="./js/metrics.js"></script>
+    <script>
+        // Accept either `client_id` or legacy `id` query parameter
+        const params = new URLSearchParams(window.location.search);
+        const clientId = params.get('client_id') || params.get('id') || 1;
+        const token = localStorage.getItem('token');
+        let currentResources = null;
+
+        async function loadResources() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+
+                const response = await fetch(`/api/metrics/resources/${clientId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                  const text = await response.text().catch(() => null);
+                  throw new Error(`HTTP ${response.status}${text ? ': ' + text : ''}`);
+                }
+
+                const data = await response.json();
+                currentResources = data;
+                document.getElementById('clientInfo').textContent = `${data.client_name} (${data.provider.toUpperCase()})`;
+                renderResources(data);
+            } catch (error) {
+                document.getElementById('error').textContent = `Error loading resources: ${error.message}`;
+                document.getElementById('error').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function renderResources(data) {
+            const resources = data.resources || {};
+
+            ['compute', 'database', 'storage', 'networking', 'security', 'analytics', 'messaging'].forEach(category => {
+                const categoryData = resources[category] || {};
+                const content = document.getElementById(`${category}-content`);
+                let html = '';
+
+                Object.entries(categoryData).forEach(([resourceType, items]) => {
+                    if (Array.isArray(items) && items.length > 0) {
+                        html += `<div class="section-title">${formatKey(resourceType)}</div>`;
+                        html += '<div class="resource-grid">';
+                        items.forEach(item => {
+                          html += renderResourceCard(item, resourceType, data.provider);
+                        });
+                        html += '</div>';
+                    }
+                });
+
+                if (!html) {
+                    html = '<div class="empty-state">No resources found in this category</div>';
+                }
+
+                content.innerHTML = html;
+            });
+        }
+
+        function renderResourceCard(item, resourceType, provider) {
+            // Determine if resource is stopped or unused
+            const isStopped = item.state && ['stopped', 'deallocated', 'terminated', 'offline'].some(s => item.state.toLowerCase().includes(s));
+            const isUnused = item.unused === true;
+            const cardClass = isStopped ? 'stopped' : isUnused ? 'unused' : '';
+            
+            let html = `<div class="resource-card ${cardClass}">`; 
+            
+            const title = item.name || item.id || item.bucket || item.account || 'Unknown';
+            let badges = '';
+            if (isStopped) badges += '<span class="badge-stopped">Stopped</span>';
+            if (isUnused) badges += '<span class="badge-unused">Unused</span>';
+            html += `<h5>${title}${badges ? ' ' + badges : ''}</h5>`;
+            Object.entries(item).forEach(([key, value]) => {
+                if (key === 'name' || key === 'id' || value === null || value === undefined) return;
+                if (typeof value === 'object') return;
+                
+                html += `<p><span class="label">${formatKey(key)}:</span> ${value}</p>`;
+            });
+
+          // Action buttons
+          const id = item.id || item.name || item.bucket || '';
+          if (id) {
+            html += `<p><a href="#" class="btn btn-sm btn-outline-light me-2" onclick='event.preventDefault(); showDetails(${JSON.stringify(item)}, "${resourceType}", "${provider}")'>Details</a><a class="btn btn-sm btn-primary" href="${generateConsoleLink(provider, resourceType, id)}" target="_blank">Open Console</a></p>`;
+          } else {
+            html += `<p><a href="#" class="btn btn-sm btn-outline-light" onclick='event.preventDefault(); showDetails(${JSON.stringify(item)}, "${resourceType}", "${provider}")'>Details</a></p>`;
+          }
+
+          html += '</div>';
+            return html;
+        }
+
+        // Show modal with raw JSON and helpful console link
+        function showDetails(item, resourceType, provider) {
+          const modalId = 'resourceDetailModal';
+          let modal = document.getElementById(modalId);
+          if (!modal) {
+            modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+              <div class="modal-content bg-dark text-light">
+              <div class="modal-header">
+                <h5 class="modal-title">Resource Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body" id="resourceDetailBody"></div>
+              <div class="modal-footer" id="resourceDetailFooter"></div>
+              </div>
+            </div>`;
+            document.body.appendChild(modal);
+          }
+
+          const body = modal.querySelector('#resourceDetailBody');
+          const footer = modal.querySelector('#resourceDetailFooter');
+          body.innerHTML = `<pre style="white-space:pre-wrap">${JSON.stringify(item, null, 2)}</pre>`;
+          footer.innerHTML = '';
+          const id = item.id || item.name || item.bucket || '';
+          if (id) {
+            const link = generateConsoleLink(provider, resourceType, id);
+            if (link) footer.innerHTML = `<a class="btn btn-sm btn-primary" href="${link}" target="_blank">Open in Console</a>`;
+          }
+
+          const bsModal = new bootstrap.Modal(modal);
+          bsModal.show();
+        }
+
+        // Generate cloud console link templates for common resources
+        function generateConsoleLink(provider, resourceType, id) {
+          provider = (provider || '').toLowerCase();
+          resourceType = (resourceType || '').toLowerCase();
+          if (provider === 'aws') {
+            if (resourceType.includes('ec2') || resourceType.includes('instances')) return `https://console.aws.amazon.com/ec2/v2/home?region=${'us-east-1'}#Instances:instanceId=${id}`;
+            if (resourceType.includes('s3')) return `https://s3.console.aws.amazon.com/s3/buckets/${id}`;
+            if (resourceType.includes('rds')) return `https://console.aws.amazon.com/rds/home?region=${'us-east-1'}#/database:id=${id};is-cluster=false`;
+            if (resourceType.includes('vpc')) return `https://console.aws.amazon.com/vpc/home?region=${'us-east-1'}#vpcs:filter=${id}`;
+          }
+          if (provider === 'azure') {
+            if (resourceType.includes('vm')) return `https://portal.azure.com/#@/resource${'/subscriptions'}/providers/Microsoft.Compute/virtualMachines/${id}`;
+            if (resourceType.includes('vnet')) return `https://portal.azure.com/#@/resource${'/subscriptions'}/providers/Microsoft.Network/virtualNetworks/${id}`;
+          }
+          if (provider === 'gcp') {
+            if (resourceType.includes('instances') || resourceType.includes('instance')) return `https://console.cloud.google.com/compute/instancesDetail/zones/-/instances/${id}`;
+            if (resourceType.includes('buckets')) return `https://console.cloud.google.com/storage/browser/${id}`;
+          }
+          return '#';
+        }
+
+        function formatKey(key) {
+            return key
+                .replace(/_/g, ' ')
+                .replace(/([A-Z])/g, ' $1')
+                .trim()
+                .split(' ')
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(' ');
+        }
+
+        function switchTab(event, tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+
+            document.getElementById(tab).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Filter resources based on stopped/unused toggles
+        function applyFilters() {
+            if (!currentResources) return;
+            const showStopped = document.getElementById('showStoppedFilter').checked;
+            const showUnused = document.getElementById('showUnusedFilter').checked;
+            
+            const filtered = JSON.parse(JSON.stringify(currentResources)); // deep copy
+            
+            for (const category in filtered.resources) {
+                for (const resourceType in filtered.resources[category]) {
+                    if (Array.isArray(filtered.resources[category][resourceType])) {
+                        filtered.resources[category][resourceType] = filtered.resources[category][resourceType].filter(item => {
+                            const isStopped = item.state && ['stopped', 'deallocated', 'terminated', 'offline'].some(s => item.state.toLowerCase().includes(s));
+                            const isUnused = item.unused === true;
+                            if (isStopped && !showStopped) return false;
+                            if (isUnused && !showUnused) return false;
+                            return true;
+                        });
+                    }
+                }
+            }
+            renderResources(filtered);
+        }
+
+        window.addEventListener('load', loadResources);
+    </script>
   </body>
 </html>
