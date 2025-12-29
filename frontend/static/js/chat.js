@@ -40,6 +40,7 @@
   const clientId = qs('id') || qs('idx') || '1';
   let client = null;
   let ws = null;
+  const renderedMessages = new Set();  // Track rendered messages to prevent duplicates
 
   async function init(){
     client = await loadClient(clientId);
@@ -52,7 +53,18 @@
     connectWebSocket();
   }
 
+  function getMessageKey(msg){
+    // Create unique key for message to prevent duplicates
+    return `${msg.sender}|${msg.message}|${msg.timestamp}`;
+  }
+
   function renderMessage(msg){
+    const key = getMessageKey(msg);
+    if(renderedMessages.has(key)){
+      return;  // Skip duplicate
+    }
+    renderedMessages.add(key);
+    
     const el = document.createElement('div');
     el.className = msg.sender === 'user' ? 'text-end' : 'text-start';
     const b = document.createElement('div');
@@ -93,11 +105,35 @@
       
       ws.addEventListener('message', e=>{
         const data = JSON.parse(e.data);
-        renderMessage({
-          message: data.message,
-          sender: data.sender,
-          timestamp: data.timestamp || Date.now()
-        });
+        
+        // Handle history load
+        if(data.type === 'history'){
+          renderedMessages.clear();  // Clear tracking when loading history
+          chatWindow.innerHTML = '';  // Clear existing messages
+          data.messages.forEach(msg => {
+            const key = getMessageKey({
+              message: msg.message,
+              sender: msg.sender,
+              timestamp: msg.timestamp
+            });
+            renderedMessages.add(key);  // Track historical messages
+            renderMessage({
+              message: msg.message,
+              sender: msg.sender,
+              timestamp: msg.timestamp || Date.now()
+            });
+          });
+          return;
+        }
+        
+        // Handle regular message
+        if(data.type === 'message'){
+          renderMessage({
+            message: data.message,
+            sender: data.sender,
+            timestamp: data.timestamp || Date.now()
+          });
+        }
       });
       
       ws.addEventListener('close', ()=>{
@@ -140,22 +176,22 @@
     const text = chatInput.value.trim();
     if(!text) return;
     
-    // Render message immediately
-    renderMessage({
-      message: text,
-      sender: 'user',
-      timestamp: Date.now()
-    });
-    
     chatInput.value = '';
     
-    // if ws connected, forward
+    // if ws connected, send to backend (backend will echo back)
     if(ws && ws.readyState===WebSocket.OPEN){
       ws.send(JSON.stringify({
         message: text,
         sender: 'user',
         timestamp: new Date().toISOString()
       }));
+    } else {
+      // Fallback: render locally if not connected
+      renderMessage({
+        message: text,
+        sender: 'user',
+        timestamp: Date.now()
+      });
     }
   });
 

@@ -45,3 +45,15 @@ class MetricSnapshot(Base):
     provider = Column(String)
     snapshot_time = Column(DateTime, server_default=func.now())
     data = Column(JSON)
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    sender = Column(String, nullable=False)  # 'user' or 'assistant'
+    message = Column(Text, nullable=False)
+    timestamp = Column(DateTime, server_default=func.now())
+    # map 'meta_data' Python attribute to 'metadata' DB column (avoid SQLAlchemy conflict)
+    meta_data = Column('metadata', JSON, nullable=True)  # store function calls, tool usage, etc.
+    # Vector embedding for semantic search (1536 dimensions for OpenAI text-embedding-3-small)
+    embedding = Column(Text, nullable=True)  # Store as JSON array string for portability
