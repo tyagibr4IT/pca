@@ -7,6 +7,8 @@ from sqlalchemy import select, desc
 from app.auth.jwt import get_current_user
 from datetime import datetime, timedelta
 import asyncio
+from botocore.config import Config
+from botocore.exceptions import ClientError
 from azure.identity import ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.storage import StorageManagementClient
@@ -87,23 +89,30 @@ async def fetch_aws_resources(client_id: int, credentials: dict):
                 "error": "Missing AWS credentials"
             }
 
+        # Configure boto3 with aggressive timeouts to prevent hanging
+        config = Config(
+            connect_timeout=3,
+            read_timeout=5,
+            retries={'max_attempts': 1, 'mode': 'standard'}
+        )
+
         session = boto3.Session(
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
             region_name=region
         )
-        ec2 = session.client("ec2")
-        rds = session.client("rds")
-        s3 = session.client("s3")
-        autoscaling = session.client("autoscaling")
-        ecs = session.client("ecs")
-        eks = session.client("eks")
-        lambda_client = session.client("lambda")
-        dynamodb = session.client("dynamodb")
-        elasticache = session.client("elasticache")
-        iam = session.client("iam")
-        kms = session.client("kms")
-        cloudfront = session.client("cloudfront")
+        ec2 = session.client("ec2", config=config)
+        rds = session.client("rds", config=config)
+        s3 = session.client("s3", config=config)
+        autoscaling = session.client("autoscaling", config=config)
+        ecs = session.client("ecs", config=config)
+        eks = session.client("eks", config=config)
+        lambda_client = session.client("lambda", config=config)
+        dynamodb = session.client("dynamodb", config=config)
+        elasticache = session.client("elasticache", config=config)
+        iam = session.client("iam", config=config)
+        kms = session.client("kms", config=config)
+        cloudfront = session.client("cloudfront", config=config)
 
         result = {
             "compute": {"ec2": [], "asg": [], "lambda": [], "ecs": [], "eks": []},
@@ -118,10 +127,21 @@ async def fetch_aws_resources(client_id: int, credentials: dict):
             reservations = ec2.describe_instances().get("Reservations", [])
             for res in reservations:
                 for inst in res.get("Instances", []):
+                    # Extract OS platform information
+                    platform = inst.get("Platform", "Linux/Unix")  # Default to Linux if not specified
+                    platform_details = inst.get("PlatformDetails", "")
+                    
+                    # Get image info for more OS details
+                    image_id = inst.get("ImageId")
+                    os_info = platform_details if platform_details else platform
+                    
                     result["compute"]["ec2"].append({
                         "id": inst.get("InstanceId"),
                         "type": inst.get("InstanceType"),
                         "state": inst.get("State", {}).get("Name"),
+                        "os_type": os_info,
+                        "platform": platform,
+                        "image_id": image_id,
                         "region": region,
                         "launch_time": inst.get("LaunchTime").isoformat() if inst.get("LaunchTime") else None
                     })
@@ -384,10 +404,30 @@ async def fetch_azure_resources(client_id: int, credentials: dict):
                 except Exception as iv_err:
                     print(f"Azure VM instance_view failed for {vm.name}: {iv_err}")
 
+                # Extract OS information
+                os_type = None
+                os_version = None
+                computer_name = None
+                if vm.storage_profile:
+                    if vm.storage_profile.os_disk:
+                        os_type = getattr(vm.storage_profile.os_disk, 'os_type', None)
+                    if vm.storage_profile.image_reference:
+                        img_ref = vm.storage_profile.image_reference
+                        publisher = getattr(img_ref, 'publisher', '')
+                        offer = getattr(img_ref, 'offer', '')
+                        sku = getattr(img_ref, 'sku', '')
+                        if publisher or offer or sku:
+                            os_version = f"{publisher} {offer} {sku}".strip()
+                if vm.os_profile:
+                    computer_name = getattr(vm.os_profile, 'computer_name', None)
+
                 result["compute"]["vm"].append({
                     "id": vm.name,
                     "size": getattr(vm.hardware_profile, "vm_size", None),
                     "state": power_state,
+                    "os_type": os_type,
+                    "os_version": os_version,
+                    "computer_name": computer_name,
                     "location": vm.location,
                     "resource_group": resource_group
                 })
@@ -635,11 +675,40 @@ async def fetch_gcp_resources(client_id: int, credentials: dict):
             agg_list = compute_client.aggregated_list(project=project)
             for zone, scoped_list in agg_list:
                 for inst in scoped_list.instances or []:
+                    # Extract OS information from disks
+                    os_type = None
+                    os_version = None
+                    if hasattr(inst, 'disks') and inst.disks:
+                        for disk in inst.disks:
+                            if disk.boot:
+                                # Try to extract OS from source image
+                                if hasattr(disk, 'initialize_params') and disk.initialize_params:
+                                    source_image = getattr(disk.initialize_params, 'source_image', '')
+                                    if source_image:
+                                        # Parse image name for OS info (e.g., "ubuntu-2004-lts", "centos-7")
+                                        image_parts = source_image.split('/')
+                                        if image_parts:
+                                            image_name = image_parts[-1]
+                                            os_version = image_name
+                                            if 'ubuntu' in image_name.lower():
+                                                os_type = 'Linux (Ubuntu)'
+                                            elif 'centos' in image_name.lower():
+                                                os_type = 'Linux (CentOS)'
+                                            elif 'debian' in image_name.lower():
+                                                os_type = 'Linux (Debian)'
+                                            elif 'rhel' in image_name.lower():
+                                                os_type = 'Linux (RHEL)'
+                                            elif 'windows' in image_name.lower():
+                                                os_type = 'Windows'
+                                break
+                    
                     result["compute"]["instances"].append({
                         "id": inst.name,
                         "type": inst.machine_type.split('/')[-1] if inst.machine_type else None,
                         "state": inst.status,
                         "zone": zone,
+                        "os_type": os_type,
+                        "os_version": os_version,
                         "cpu_platform": getattr(inst, "cpu_platform", None)
                     })
         except Exception as e:
@@ -837,6 +906,429 @@ async def get_resource_inventory(
         "resources": resources,
         "summary": summary
     }
+
+@router.get("/resource-details/{client_id}/{resource_type}/{resource_id}")
+async def get_resource_details(
+    client_id: int,
+    resource_type: str,
+    resource_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Fetch comprehensive details for a specific resource"""
+    result = await db.execute(select(Tenant).where(Tenant.id == client_id))
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    meta = client.metadata_json or {}
+    provider = (meta.get("provider") or "aws").lower()
+    
+    # Fetch detailed resource information based on provider
+    if provider == "aws":
+        details = await fetch_aws_resource_details(meta, resource_type, resource_id)
+    elif provider == "azure":
+        details = await fetch_azure_resource_details(meta, resource_type, resource_id)
+    elif provider == "gcp":
+        details = await fetch_gcp_resource_details(meta, resource_type, resource_id)
+    else:
+        details = {"error": "Unknown provider"}
+    
+    return {
+        "client_id": client_id,
+        "provider": provider,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "details": details
+    }
+
+async def fetch_aws_resource_details(credentials: dict, resource_type: str, resource_id: str):
+    """Fetch comprehensive AWS resource details"""
+    import boto3
+    try:
+        access_key = credentials.get("clientId") or credentials.get("access_key")
+        secret_key = credentials.get("clientSecret") or credentials.get("secret_key")
+        region = credentials.get("region") or "us-east-1"
+        
+        if not (access_key and secret_key):
+            return {"error": "Missing AWS credentials"}
+        
+        config = Config(connect_timeout=5, read_timeout=10, retries={'max_attempts': 2})
+        session = boto3.Session(
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region
+        )
+        
+        details = {}
+        
+        # EC2 Instance Details
+        if "ec2" in resource_type.lower() or "instance" in resource_type.lower():
+            ec2 = session.client("ec2", config=config)
+            try:
+                response = ec2.describe_instances(InstanceIds=[resource_id])
+                if response.get("Reservations"):
+                    instance = response["Reservations"][0]["Instances"][0]
+                    details["instance"] = instance
+                    
+                    # Get security groups
+                    sg_ids = [sg["GroupId"] for sg in instance.get("SecurityGroups", [])]
+                    if sg_ids:
+                        sg_response = ec2.describe_security_groups(GroupIds=sg_ids)
+                        details["security_groups"] = sg_response.get("SecurityGroups", [])
+                    
+                    # Get volumes
+                    volume_ids = [
+                        mapping["Ebs"]["VolumeId"] 
+                        for mapping in instance.get("BlockDeviceMappings", []) 
+                        if "Ebs" in mapping
+                    ]
+                    if volume_ids:
+                        vol_response = ec2.describe_volumes(VolumeIds=volume_ids)
+                        details["volumes"] = vol_response.get("Volumes", [])
+                    
+                    # Get network interfaces
+                    details["network_interfaces"] = instance.get("NetworkInterfaces", [])
+                    
+                    # Get tags
+                    details["tags"] = instance.get("Tags", [])
+                    
+                    # Get monitoring state
+                    details["monitoring"] = instance.get("Monitoring", {})
+                    
+            except ClientError as e:
+                details["error"] = str(e)
+        
+        # RDS Database Details
+        elif "rds" in resource_type.lower():
+            rds = session.client("rds", config=config)
+            try:
+                response = rds.describe_db_instances(DBInstanceIdentifier=resource_id)
+                if response.get("DBInstances"):
+                    db_instance = response["DBInstances"][0]
+                    details["database"] = db_instance
+                    
+                    # Get snapshots
+                    snap_response = rds.describe_db_snapshots(DBInstanceIdentifier=resource_id, MaxRecords=20)
+                    details["snapshots"] = snap_response.get("DBSnapshots", [])
+                    
+                    # Get parameter groups
+                    details["parameter_groups"] = db_instance.get("DBParameterGroups", [])
+                    
+                    # Get security groups
+                    details["vpc_security_groups"] = db_instance.get("VpcSecurityGroups", [])
+                    
+            except ClientError as e:
+                details["error"] = str(e)
+        
+        # S3 Bucket Details
+        elif "s3" in resource_type.lower():
+            s3 = session.client("s3", config=config)
+            try:
+                # Get bucket location
+                location = s3.get_bucket_location(Bucket=resource_id)
+                details["location"] = location.get("LocationConstraint", "us-east-1")
+                
+                # Get versioning
+                versioning = s3.get_bucket_versioning(Bucket=resource_id)
+                details["versioning"] = versioning.get("Status", "Disabled")
+                
+                # Get encryption
+                try:
+                    encryption = s3.get_bucket_encryption(Bucket=resource_id)
+                    details["encryption"] = encryption.get("ServerSideEncryptionConfiguration", {})
+                except ClientError:
+                    details["encryption"] = "None"
+                
+                # Get lifecycle
+                try:
+                    lifecycle = s3.get_bucket_lifecycle_configuration(Bucket=resource_id)
+                    details["lifecycle_rules"] = lifecycle.get("Rules", [])
+                except ClientError:
+                    details["lifecycle_rules"] = []
+                
+                # Get tags
+                try:
+                    tags = s3.get_bucket_tagging(Bucket=resource_id)
+                    details["tags"] = tags.get("TagSet", [])
+                except ClientError:
+                    details["tags"] = []
+                    
+            except ClientError as e:
+                details["error"] = str(e)
+        
+        return details
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+async def fetch_azure_resource_details(credentials: dict, resource_type: str, resource_id: str):
+    """Fetch comprehensive Azure resource details"""
+    try:
+        from azure.identity import ClientSecretCredential
+        from azure.mgmt.compute import ComputeManagementClient
+        from azure.mgmt.network import NetworkManagementClient
+        from azure.mgmt.sql import SqlManagementClient
+        
+        tenant_id = credentials.get("tenantId") or credentials.get("tenant_id")
+        client_id = credentials.get("clientId") or credentials.get("client_id")
+        client_secret = credentials.get("clientSecret") or credentials.get("client_secret")
+        subscription_id = credentials.get("subscriptionId") or credentials.get("subscription_id")
+        
+        if not all([tenant_id, client_id, client_secret, subscription_id]):
+            return {"error": "Missing Azure credentials"}
+        
+        credential = ClientSecretCredential(tenant_id, client_id, client_secret)
+        compute_client = ComputeManagementClient(credential, subscription_id)
+        network_client = NetworkManagementClient(credential, subscription_id)
+        
+        details = {}
+        
+        # VM Details
+        if "vm" in resource_type.lower():
+            try:
+                # Find the VM across all resource groups
+                for vm in compute_client.virtual_machines.list_all():
+                    if vm.name == resource_id:
+                        resource_group = vm.id.split('/')[4]
+                        
+                        # Get VM details
+                        details["vm"] = {
+                            "name": vm.name,
+                            "location": vm.location,
+                            "size": vm.hardware_profile.vm_size if vm.hardware_profile else None,
+                            "os_type": vm.storage_profile.os_disk.os_type if vm.storage_profile and vm.storage_profile.os_disk else None,
+                            "id": vm.id,
+                            "tags": vm.tags
+                        }
+                        
+                        # Get instance view (power state, diagnostics)
+                        instance_view = compute_client.virtual_machines.instance_view(resource_group, vm.name)
+                        details["instance_view"] = {
+                            "statuses": [{"code": s.code, "display_status": s.display_status} for s in (instance_view.statuses or [])],
+                            "vm_agent": instance_view.vm_agent.statuses if instance_view.vm_agent else None
+                        }
+                        
+                        # Get disks
+                        if vm.storage_profile:
+                            details["os_disk"] = {
+                                "name": vm.storage_profile.os_disk.name,
+                                "size_gb": vm.storage_profile.os_disk.disk_size_gb,
+                                "caching": vm.storage_profile.os_disk.caching
+                            } if vm.storage_profile.os_disk else None
+                            
+                            details["data_disks"] = [
+                                {
+                                    "name": disk.name,
+                                    "size_gb": disk.disk_size_gb,
+                                    "lun": disk.lun,
+                                    "caching": disk.caching
+                                }
+                                for disk in (vm.storage_profile.data_disks or [])
+                            ]
+                        
+                        # Get network interfaces
+                        nic_refs = vm.network_profile.network_interfaces if vm.network_profile else []
+                        details["network_interfaces"] = []
+                        for nic_ref in nic_refs:
+                            nic_id = nic_ref.id
+                            nic_parts = nic_id.split('/')
+                            nic_rg = nic_parts[4]
+                            nic_name = nic_parts[-1]
+                            nic = network_client.network_interfaces.get(nic_rg, nic_name)
+                            details["network_interfaces"].append({
+                                "name": nic.name,
+                                "private_ip": nic.ip_configurations[0].private_ip_address if nic.ip_configurations else None,
+                                "primary": nic_ref.primary
+                            })
+                        
+                        # Get extensions
+                        extensions = compute_client.virtual_machine_extensions.list(resource_group, vm.name)
+                        details["extensions"] = [
+                            {"name": ext.name, "publisher": ext.publisher, "type": ext.type_properties_type}
+                            for ext in extensions
+                        ]
+                        
+                        break
+                        
+            except Exception as e:
+                details["error"] = str(e)
+        
+        # SQL Database Details
+        elif "sql" in resource_type.lower():
+            try:
+                sql_client = SqlManagementClient(credential, subscription_id)
+                # Parse server/database from resource_id (format: "server/database")
+                if "/" in resource_id:
+                    server_name, db_name = resource_id.split("/", 1)
+                    
+                    # Find the server across resource groups
+                    for server in sql_client.servers.list():
+                        if server.name == server_name:
+                            resource_group = server.id.split('/')[4]
+                            
+                            # Get database details
+                            database = sql_client.databases.get(resource_group, server_name, db_name)
+                            details["database"] = {
+                                "name": database.name,
+                                "location": database.location,
+                                "sku": database.sku.name if database.sku else None,
+                                "max_size_bytes": database.max_size_bytes,
+                                "status": database.status,
+                                "creation_date": str(database.creation_date) if database.creation_date else None
+                            }
+                            
+                            # Get server details
+                            details["server"] = {
+                                "name": server.name,
+                                "version": server.version,
+                                "administrator_login": server.administrator_login,
+                                "state": server.state
+                            }
+                            
+                            break
+            except Exception as e:
+                details["error"] = str(e)
+        
+        return details
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+async def fetch_gcp_resource_details(credentials: dict, resource_type: str, resource_id: str):
+    """Fetch comprehensive GCP resource details"""
+    try:
+        from google.cloud import compute_v1, storage
+        from google.oauth2 import service_account
+        import json
+        import os
+        
+        # Support multiple credential key names for compatibility
+        sa_json = credentials.get("serviceAccountJson") or credentials.get("serviceAccountKey") or credentials.get("credentials")
+        sa_path = credentials.get("serviceAccountPath")
+        project = credentials.get("projectId") or credentials.get("project_id") or credentials.get("project")
+        
+        if not project:
+            return {"error": "Missing GCP projectId"}
+        
+        # Load credentials from JSON or file path
+        if sa_json:
+            creds_json = json.loads(sa_json) if isinstance(sa_json, str) else sa_json
+            creds = service_account.Credentials.from_service_account_info(creds_json)
+        elif sa_path and os.path.exists(sa_path):
+            creds = service_account.Credentials.from_service_account_file(sa_path)
+        else:
+            return {"error": "Missing GCP service account credentials"}
+        
+        creds = creds.with_scopes(['https://www.googleapis.com/auth/cloud-platform'])
+        
+        details = {}
+        
+        # Compute Instance Details
+        if "instance" in resource_type.lower():
+            try:
+                compute_client = compute_v1.InstancesClient(credentials=creds)
+                
+                # Find instance across all zones
+                agg_list = compute_client.aggregated_list(project=project)
+                for zone_name, scoped_list in agg_list:
+                    for inst in scoped_list.instances or []:
+                        if inst.name == resource_id:
+                            zone = zone_name.split('/')[-1]
+                            
+                            # Get full instance details
+                            instance = compute_client.get(project=project, zone=zone, instance=resource_id)
+                            
+                            details["instance"] = {
+                                "name": instance.name,
+                                "status": instance.status,
+                                "machine_type": instance.machine_type.split('/')[-1],
+                                "zone": zone,
+                                "cpu_platform": instance.cpu_platform,
+                                "creation_timestamp": instance.creation_timestamp,
+                                "description": instance.description
+                            }
+                            
+                            # Get disks
+                            details["disks"] = [
+                                {
+                                    "device_name": disk.device_name,
+                                    "boot": disk.boot,
+                                    "auto_delete": disk.auto_delete,
+                                    "source": disk.source.split('/')[-1] if disk.source else None
+                                }
+                                for disk in (instance.disks or [])
+                            ]
+                            
+                            # Get network interfaces
+                            details["network_interfaces"] = [
+                                {
+                                    "network": ni.network.split('/')[-1] if ni.network else None,
+                                    "subnetwork": ni.subnetwork.split('/')[-1] if ni.subnetwork else None,
+                                    "internal_ip": ni.network_i_p,
+                                    "external_ips": [ac.nat_i_p for ac in (ni.access_configs or []) if ac.nat_i_p]
+                                }
+                                for ni in (instance.network_interfaces or [])
+                            ]
+                            
+                            # Get metadata
+                            if instance.metadata and instance.metadata.items:
+                                details["metadata"] = [
+                                    {"key": item.key, "value": item.value}
+                                    for item in instance.metadata.items
+                                ]
+                            
+                            # Get tags
+                            if instance.tags and instance.tags.items:
+                                details["tags"] = list(instance.tags.items)
+                            
+                            # Get labels
+                            if instance.labels:
+                                details["labels"] = dict(instance.labels)
+                            
+                            # Get service accounts
+                            details["service_accounts"] = [
+                                {"email": sa.email, "scopes": list(sa.scopes)}
+                                for sa in (instance.service_accounts or [])
+                            ]
+                            
+                            break
+                            
+            except Exception as e:
+                details["error"] = str(e)
+        
+        # Storage Bucket Details
+        elif "bucket" in resource_type.lower():
+            try:
+                storage_client = storage.Client(project=project, credentials=creds)
+                bucket = storage_client.get_bucket(resource_id)
+                
+                details["bucket"] = {
+                    "name": bucket.name,
+                    "location": bucket.location,
+                    "storage_class": bucket.storage_class,
+                    "time_created": str(bucket.time_created) if bucket.time_created else None,
+                    "versioning_enabled": bucket.versioning_enabled,
+                    "labels": dict(bucket.labels) if bucket.labels else {}
+                }
+                
+                # Get lifecycle rules
+                if bucket.lifecycle_rules:
+                    details["lifecycle_rules"] = [
+                        {
+                            "action": rule.get("action", {}),
+                            "condition": rule.get("condition", {})
+                        }
+                        for rule in bucket.lifecycle_rules
+                    ]
+                
+            except Exception as e:
+                details["error"] = str(e)
+        
+        return details
+        
+    except Exception as e:
+        return {"error": str(e)}
 
 @router.get("/costs/{client_id}")
 async def get_cost_analysis(

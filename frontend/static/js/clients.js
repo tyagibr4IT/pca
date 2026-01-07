@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  const table = document.getElementById('clientsTable');
+  const grid = document.getElementById('clientsGrid');
   // modal fields (clients are added/edited via modal on dashboard or clients page)
   const provider = document.getElementById('modalProvider');
   const clientName = document.getElementById('modalClientName');
@@ -47,6 +47,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const clientSecret = document.getElementById('modalClientSecret');
 
   let clients = [];
+  let filteredClients = [];
+  let currentPage = 1;
+  let itemsPerPageValue = 12;
   
   // Use global variable for editing state so modal can access it
   window.editingClientId = null;
@@ -136,61 +139,242 @@ document.addEventListener('DOMContentLoaded', async () => {
     return v.length > 6 ? v.slice(0,3) + '•••' + v.slice(-3) : '••••';
   }
 
-  async function render(){
-    await loadClients();
-    table.innerHTML = '';
+  function applyFilters() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const providerFilter = document.getElementById('providerFilter').value;
     
-    if(clients.length === 0){
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="5" class="text-center text-muted">No clients found. Click "Add Client" to create one.</td>';
-      table.appendChild(tr);
+    filteredClients = clients.filter(c => {
+      const meta = c.metadata_json || {};
+      const provider = meta.provider || 'aws';
+      const name = (c.name || '').toLowerCase();
+      
+      // Apply search filter
+      const matchesSearch = name.includes(searchTerm);
+      
+      // Apply provider filter
+      const matchesProvider = providerFilter === 'all' || provider === providerFilter;
+      
+      return matchesSearch && matchesProvider;
+    });
+    
+    currentPage = 1; // Reset to first page when filters change
+    renderClients();
+  }
+
+  function renderPagination() {
+    const totalItems = filteredClients.length;
+    const totalPages = itemsPerPageValue === 'all' ? 1 : Math.ceil(totalItems / itemsPerPageValue);
+    
+    const paginationTop = document.getElementById('paginationTop');
+    const paginationBottom = document.getElementById('paginationBottom');
+    const controlsTop = document.getElementById('paginationControlsTop');
+    const controlsBottom = document.getElementById('paginationControlsBottom');
+    
+    // Show/hide pagination
+    if (totalPages <= 1 || itemsPerPageValue === 'all') {
+      paginationTop.style.display = 'none';
+      paginationBottom.style.display = 'none';
       return;
     }
     
-    clients.forEach((c, idx) => {
+    paginationTop.style.display = 'block';
+    paginationBottom.style.display = 'flex';
+    
+    // Build pagination HTML
+    let paginationHTML = '';
+    
+    // Previous button
+    paginationHTML += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+      <a class="page-link" href="#" data-page="${currentPage - 1}" style="background: #0d1117; border-color: #30363d; color: #e6edf3;">Previous</a>
+    </li>`;
+    
+    // Page numbers
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage < maxVisible - 1) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    
+    if (startPage > 1) {
+      paginationHTML += `<li class="page-item"><a class="page-link" href="#" data-page="1" style="background: #0d1117; border-color: #30363d; color: #e6edf3;">1</a></li>`;
+      if (startPage > 2) {
+        paginationHTML += `<li class="page-item disabled"><span class="page-link" style="background: #0d1117; border-color: #30363d; color: #7d8590;">...</span></li>`;
+      }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      paginationHTML += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+        <a class="page-link" href="#" data-page="${i}" style="background: ${i === currentPage ? '#1f6feb' : '#0d1117'}; border-color: #30363d; color: #e6edf3;">${i}</a>
+      </li>`;
+    }
+    
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        paginationHTML += `<li class="page-item disabled"><span class="page-link" style="background: #0d1117; border-color: #30363d; color: #7d8590;">...</span></li>`;
+      }
+      paginationHTML += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}" style="background: #0d1117; border-color: #30363d; color: #e6edf3;">${totalPages}</a></li>`;
+    }
+    
+    // Next button
+    paginationHTML += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+      <a class="page-link" href="#" data-page="${currentPage + 1}" style="background: #0d1117; border-color: #30363d; color: #e6edf3;">Next</a>
+    </li>`;
+    
+    controlsTop.innerHTML = paginationHTML;
+    controlsBottom.innerHTML = paginationHTML;
+  }
+
+  function renderClients() {
+    // Update stats (based on filtered results)
+    const awsClients = filteredClients.filter(c => (c.metadata_json?.provider || 'aws') === 'aws');
+    const azureClients = filteredClients.filter(c => c.metadata_json?.provider === 'azure');
+    const gcpClients = filteredClients.filter(c => c.metadata_json?.provider === 'gcp');
+    
+    document.getElementById('totalClients').textContent = clients.length;
+    document.getElementById('awsCount').textContent = awsClients.length;
+    document.getElementById('azureCount').textContent = azureClients.length;
+    document.getElementById('gcpCount').textContent = gcpClients.length;
+    
+    // Update results info
+    const totalItems = filteredClients.length;
+    document.getElementById('totalCount').textContent = clients.length;
+    document.getElementById('showingCount').textContent = totalItems;
+    
+    grid.innerHTML = '';
+    
+    if(clients.length === 0){
+      const col = document.createElement('div');
+      col.className = 'col-12';
+      col.innerHTML = `
+        <div class="empty-state">
+          <i class="bi bi-cloud-slash"></i>
+          <h4 class="text-white mb-3">No Clients Found</h4>
+          <p class="text-muted mb-4">Get started by adding your first cloud provider integration</p>
+          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#clientModal">
+            <i class="bi bi-plus-circle-fill me-2"></i>Add Your First Client
+          </button>
+        </div>`;
+      grid.appendChild(col);
+      return;
+    }
+    
+    if(filteredClients.length === 0){
+      const col = document.createElement('div');
+      col.className = 'col-12';
+      col.innerHTML = `
+        <div class="empty-state">
+          <i class="bi bi-search"></i>
+          <h4 class="text-white mb-3">No Clients Found</h4>
+          <p class="text-muted mb-4">No clients match your search criteria. Try adjusting your filters.</p>
+          <button id="clearFiltersBtn" class="btn btn-outline-secondary">
+            <i class="bi bi-x-circle me-1"></i>Clear Filters
+          </button>
+        </div>`;
+      grid.appendChild(col);
+      renderPagination();
+      return;
+    }
+    
+    // Calculate pagination
+    const startIndex = itemsPerPageValue === 'all' ? 0 : (currentPage - 1) * itemsPerPageValue;
+    const endIndex = itemsPerPageValue === 'all' ? filteredClients.length : startIndex + itemsPerPageValue;
+    const paginatedClients = filteredClients.slice(startIndex, endIndex);
+    
+    paginatedClients.forEach((c, idx) => {
       const meta = c.metadata_json || {};
-      const provider = meta.provider || 'aws';
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><strong>${c.name}</strong></td>
-        <td><span class="badge bg-secondary">${provider.toUpperCase()}</span></td>
-        <td><code class="text-warning">${mask(meta.clientId || '')}</code></td>
-        <td><code class="text-warning">${mask(meta.clientSecret || '')}</code></td>
-        <td>
-          <button class="btn btn-sm btn-outline-light me-1 admin-only" data-act="edit" data-id="${c.id}" title="Edit" aria-label="Edit">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708L6.953 12.847a.5.5 0 0 1-.168.11l-4 1.5a.5.5 0 0 1-.65-.65l1.5-4a.5.5 0 0 1 .11-.168L12.146.854zM11.207 2L3 10.207V13h2.793L14 4.793 11.207 2z"/>
-            </svg>
-          </button>
-          <button class="btn btn-sm btn-outline-info me-1" data-act="view" data-id="${c.id}" title="View Details" aria-label="View Details">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM8 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z"/>
-            </svg>
-          </button>
-          <button class="btn btn-sm btn-outline-light me-1" data-act="metrics" data-id="${c.id}" title="View Metrics" aria-label="View Metrics">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M2.5 0a.5.5 0 0 0-.5.5v15a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5v-15a.5.5 0 0 0-.5-.5h-11zm3 2h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1 0-1zm0 2h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1 0-1zm0 2h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1 0-1z"/>
-            </svg>
-          </button>
-          <button class="btn btn-sm btn-outline-light me-1" data-act="chat" data-id="${c.id}" title="Open Chat" aria-label="Open Chat">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M2.678 11.894a1 1 0 0 1 .287.801 10.97 10.97 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8.06 8.06 0 0 0 8 14c3.996 0 7-2.807 7-6 0-3.192-3.004-6-7-6S1 4.808 1 8c0 1.468.617 2.83 1.678 3.894z"/>
-            </svg>
-          </button>
-          <button class="btn btn-sm btn-danger admin-only" data-act="delete" data-id="${c.id}" title="Delete" aria-label="Delete">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5zM8 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 8 5.5zm2.5-.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"/>
-              <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 1 1 0-2h3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3a1 1 0 0 1 1 1zM4.118 4L4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 2a.5.5 0 0 0 0 1H13.5a.5.5 0 0 0 0-1H2.5z"/>
-            </svg>
-          </button>
-        </td>
-      `;
-      table.appendChild(tr);
+      const providerName = meta.provider || 'aws';
+      const providerIcon = providerName === 'aws' ? '☁️' : providerName === 'azure' ? '⊞' : '🔴';
+      
+      const col = document.createElement('div');
+      col.className = 'col-md-6 col-lg-4';
+      col.innerHTML = `
+        <div class="client-card">
+          <span class="provider-badge ${providerName}">${providerName.toUpperCase()}</span>
+          
+          <div class="client-card-header">
+            <div class="client-card-icon">${providerIcon}</div>
+            <h5 class="client-card-title">${c.name}</h5>
+          </div>
+          
+          <div class="client-card-meta">
+            <div class="meta-item">
+              <div class="meta-label">Client ID</div>
+              <div class="meta-value">${mask(meta.clientId || '')}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Secret</div>
+              <div class="meta-value">${mask(meta.clientSecret || '')}</div>
+            </div>
+          </div>
+          
+          <div class="client-card-actions">
+            <button class="action-btn btn btn-sm btn-outline-light admin-only" data-act="edit" data-id="${c.id}" title="Edit">
+              <i class="bi bi-pencil-fill"></i> Edit
+            </button>
+            <button class="action-btn btn btn-sm btn-outline-info" data-act="view" data-id="${c.id}" title="View Details">
+              <i class="bi bi-eye-fill"></i> View
+            </button>
+            <button class="action-btn btn btn-sm btn-outline-primary" data-act="metrics" data-id="${c.id}" title="View Metrics">
+              <i class="bi bi-graph-up"></i> Metrics
+            </button>
+            <button class="action-btn btn btn-sm btn-outline-success" data-act="chat" data-id="${c.id}" title="Open Chat">
+              <i class="bi bi-chat-dots-fill"></i> Chat
+            </button>
+            <button class="action-btn btn btn-sm btn-danger admin-only" data-act="delete" data-id="${c.id}" title="Delete">
+              <i class="bi bi-trash-fill"></i> Delete
+            </button>
+          </div>
+        </div>`;
+      grid.appendChild(col);
     });
+    
+    renderPagination();
+  }
+
+  async function render(){
+    await loadClients();
+    filteredClients = [...clients];
+    renderClients();
   }
 
   // Respond to external updates (e.g. modal on dashboard saved a client)
   window.addEventListener('clients-updated', render);
+
+  // Filter and pagination event listeners
+  document.getElementById('searchInput').addEventListener('input', applyFilters);
+  document.getElementById('providerFilter').addEventListener('change', applyFilters);
+  document.getElementById('itemsPerPage').addEventListener('change', (e) => {
+    itemsPerPageValue = e.target.value === 'all' ? 'all' : parseInt(e.target.value);
+    currentPage = 1;
+    renderClients();
+  });
+  
+  document.getElementById('clearFilters').addEventListener('click', () => {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('providerFilter').value = 'all';
+    applyFilters();
+  });
+  
+  // Pagination clicks
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.page-link') && e.target.dataset.page) {
+      e.preventDefault();
+      const page = parseInt(e.target.dataset.page);
+      if (page >= 1 && page <= Math.ceil(filteredClients.length / itemsPerPageValue)) {
+        currentPage = page;
+        renderClients();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+    // Handle clear filters in empty state
+    if (e.target.id === 'clearFiltersBtn' || e.target.closest('#clearFiltersBtn')) {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('providerFilter').value = 'all';
+      applyFilters();
+    }
+  });
 
   function reset(){
     if(document.getElementById('modalClientForm')) document.getElementById('modalClientForm').reset();
@@ -206,7 +390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(window.toggleAzureModalFields) window.toggleAzureModalFields();
   }
 
-  table.addEventListener('click', async (e) => {
+  grid.addEventListener('click', async (e) => {
     const btn = e.target.closest('button');
     if(!btn) return;
     const act = btn.dataset.act;

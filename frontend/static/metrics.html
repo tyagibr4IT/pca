@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloud Resources - Metrics</title>
     <link href="./vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="./css/dashboard.css" rel="stylesheet">
     <style>
         .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #495057; flex-wrap: wrap; }
@@ -119,6 +120,7 @@
                   <button class="tab" onclick="switchTab(event, 'security')">Security</button>
                   <button class="tab" onclick="switchTab(event, 'analytics')">Analytics</button>
                   <button class="tab" onclick="switchTab(event, 'messaging')">Messaging</button>
+                  <button class="tab" onclick="switchTab(event, 'billing')">Billing & Costs</button>
                 </div>
 
                 <!-- Compute Resources -->
@@ -154,6 +156,11 @@
                 <!-- Messaging Resources -->
                 <div id="messaging" class="tab-content">
                   <div id="messaging-content"></div>
+                </div>
+
+                <!-- Billing & Costs -->
+                <div id="billing" class="tab-content">
+                  <div id="billing-content"></div>
                 </div>
               </div>
             </div>
@@ -222,6 +229,10 @@
 
                 content.innerHTML = html;
             });
+
+            // Render billing tab
+            const billingContent = document.getElementById('billing-content');
+            billingContent.innerHTML = renderBillingTab(data);
         }
 
         function renderResourceCard(item, resourceType, provider) {
@@ -245,19 +256,14 @@
             });
 
           // Action buttons
-          const id = item.id || item.name || item.bucket || '';
-          if (id) {
-            html += `<p><a href="#" class="btn btn-sm btn-outline-light me-2" onclick='event.preventDefault(); showDetails(${JSON.stringify(item)}, "${resourceType}", "${provider}")'>Details</a><a class="btn btn-sm btn-primary" href="${generateConsoleLink(provider, resourceType, id)}" target="_blank">Open Console</a></p>`;
-          } else {
-            html += `<p><a href="#" class="btn btn-sm btn-outline-light" onclick='event.preventDefault(); showDetails(${JSON.stringify(item)}, "${resourceType}", "${provider}")'>Details</a></p>`;
-          }
+          html += `<p><a href="#" class="btn btn-sm btn-outline-light" onclick='event.preventDefault(); showDetails(${JSON.stringify(item)}, "${resourceType}", "${provider}", ${clientId})'>Details</a></p>`;
 
           html += '</div>';
             return html;
         }
 
-        // Show modal with raw JSON and helpful console link
-        function showDetails(item, resourceType, provider) {
+        // Show modal with comprehensive resource details from API
+        async function showDetails(item, resourceType, provider, tenantId) {
           const modalId = 'resourceDetailModal';
           let modal = document.getElementById(modalId);
           if (!modal) {
@@ -265,31 +271,377 @@
             modal.id = modalId;
             modal.className = 'modal fade';
             modal.innerHTML = `
-            <div class="modal-dialog modal-lg modal-dialog-scrollable">
-              <div class="modal-content bg-dark text-light">
-              <div class="modal-header">
-                <h5 class="modal-title">Resource Details</h5>
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+              <div class="modal-content" style="background: #0d1117; border: 1px solid #30363d;">
+              <div class="modal-header" style="border-bottom: 1px solid #30363d;">
+                <h5 class="modal-title text-light">
+                  <i class="bi bi-info-circle-fill text-primary me-2"></i>Resource Details
+                </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
               </div>
-              <div class="modal-body" id="resourceDetailBody"></div>
-              <div class="modal-footer" id="resourceDetailFooter"></div>
+              <div class="modal-body" id="resourceDetailBody" style="background: #0d1117;">
+                <div class="text-center p-5">
+                  <div class="spinner-border text-primary mb-3" role="status"></div>
+                  <p class="text-light">Loading comprehensive details...</p>
+                </div>
+              </div>
               </div>
             </div>`;
             document.body.appendChild(modal);
           }
 
           const body = modal.querySelector('#resourceDetailBody');
-          const footer = modal.querySelector('#resourceDetailFooter');
-          body.innerHTML = `<pre style="white-space:pre-wrap">${JSON.stringify(item, null, 2)}</pre>`;
-          footer.innerHTML = '';
-          const id = item.id || item.name || item.bucket || '';
-          if (id) {
-            const link = generateConsoleLink(provider, resourceType, id);
-            if (link) footer.innerHTML = `<a class="btn btn-sm btn-primary" href="${link}" target="_blank">Open in Console</a>`;
-          }
+          
+          // Show loading state
+          body.innerHTML = `
+            <div class="text-center p-5">
+              <div class="spinner-border text-primary mb-3" role="status"></div>
+              <p class="text-light">Fetching detailed information from ${provider.toUpperCase()}...</p>
+            </div>`;
 
           const bsModal = new bootstrap.Modal(modal);
           bsModal.show();
+          
+          // Fetch comprehensive details from API
+          try {
+            const resourceId = item.id || item.name || item.bucket || item.account;
+            const response = await fetch(
+              `/api/metrics/resource-details/${tenantId}/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}`,
+              { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // Build beautiful UI for details
+            const resourceName = item.name || item.id || item.bucket || 'Unknown Resource';
+            const providerIcon = provider === 'aws' ? '🟠' : provider === 'azure' ? '🔵' : '🔴';
+            const stateInfo = getResourceState(item, data.details);
+            
+            let detailsHtml = `
+              <div class="card mb-3" style="background: #161b22; border: 1px solid #30363d;">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                      <h4 class="text-light mb-2">${providerIcon} ${resourceName}</h4>
+                      <div class="d-flex gap-2 flex-wrap">
+                        <span class="badge" style="background: #238636; font-size: 12px;">
+                          <i class="bi bi-hdd-stack me-1"></i>${formatKey(resourceType)}
+                        </span>
+                        <span class="badge" style="background: #1f6feb; font-size: 12px;">
+                          <i class="bi bi-cloud me-1"></i>${provider.toUpperCase()}
+                        </span>
+                        ${stateInfo.badge}
+                      </div>
+                    </div>
+                    <div class="text-end">
+                      ${stateInfo.icon}
+                    </div>
+                  </div>
+                </div>
+              </div>`;
+            
+            // Display fetched details in organized sections
+            if (data.details && Object.keys(data.details).length > 0) {
+              const accordion_id = 'detailsAccordion_' + Date.now();
+              detailsHtml += `<div class="accordion" id="${accordion_id}">`;
+              
+              let idx = 0;
+              for (const [section, sectionData] of Object.entries(data.details)) {
+                if (section === 'error') {
+                  detailsHtml += `<div class="alert alert-warning mb-3"><i class="bi bi-exclamation-triangle me-2"></i>${sectionData}</div>`;
+                  continue;
+                }
+                
+                const sectionId = `section_${idx}`;
+                const isFirst = idx === 0;
+                const sectionIcon = getSectionIcon(section);
+                
+                detailsHtml += `
+                  <div class="accordion-item" style="background: #161b22; border: 1px solid #30363d; margin-bottom: 8px;">
+                    <h2 class="accordion-header">
+                      <button class="accordion-button ${isFirst ? '' : 'collapsed'}" type="button" 
+                              data-bs-toggle="collapse" data-bs-target="#${sectionId}"
+                              style="background: #161b22; color: #e6edf3; border: none; font-size: 14px; padding: 12px 16px;">
+                        ${sectionIcon} <strong>${formatKey(section)}</strong>
+                        <span class="badge bg-secondary ms-2" style="font-size: 10px;">
+                          ${Array.isArray(sectionData) ? sectionData.length + ' items' : typeof sectionData === 'object' ? Object.keys(sectionData).length + ' properties' : ''}
+                        </span>
+                      </button>
+                    </h2>
+                    <div id="${sectionId}" class="accordion-collapse collapse ${isFirst ? 'show' : ''}" data-bs-parent="#${accordion_id}">
+                      <div class="accordion-body" style="background: #0d1117; padding: 16px;">`;
+                
+                if (Array.isArray(sectionData) && sectionData.length > 0) {
+                  // Render arrays as beautiful cards
+                  detailsHtml += '<div class="row g-3">';
+                  sectionData.forEach((arrItem, arrIdx) => {
+                    detailsHtml += `<div class="col-md-6">
+                      <div class="card h-100" style="background: #161b22; border: 1px solid #30363d;">
+                        <div class="card-body p-3">
+                          <div class="badge bg-primary mb-2" style="font-size: 10px;">Item ${arrIdx + 1}</div>`;
+                    
+                    if (typeof arrItem === 'object') {
+                      for (const [k, v] of Object.entries(arrItem)) {
+                        const formattedValue = formatValue(v, k);
+                        detailsHtml += `
+                          <div class="mb-2">
+                            <small class="text-muted d-block" style="font-size: 11px;">${formatKey(k)}</small>
+                            <span class="text-light" style="font-size: 13px;">${formattedValue}</span>
+                          </div>`;
+                      }
+                    } else {
+                      detailsHtml += `<span class="text-light">${arrItem}</span>`;
+                    }
+                    
+                    detailsHtml += `</div></div></div>`;
+                  });
+                  detailsHtml += '</div>';
+                } else if (typeof sectionData === 'object' && sectionData !== null) {
+                  // Render objects as styled key-value pairs
+                  detailsHtml += '<div class="row g-2">';
+                  for (const [key, value] of Object.entries(sectionData)) {
+                    if (value === null || value === undefined) continue;
+                    const formattedValue = formatValue(value, key);
+                    const isImportant = isImportantField(key);
+                    
+                    detailsHtml += `
+                      <div class="col-md-6">
+                        <div class="d-flex flex-column p-3 rounded" style="background: ${isImportant ? '#1c2128' : '#161b22'}; border-left: 3px solid ${isImportant ? '#1f6feb' : '#30363d'};">
+                          <small class="text-muted mb-1" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">${formatKey(key)}</small>
+                          <span class="text-light" style="font-size: 13px; word-break: break-word;">${formattedValue}</span>
+                        </div>
+                      </div>`;
+                  }
+                  detailsHtml += '</div>';
+                } else {
+                  // Render primitives
+                  detailsHtml += `<div class="p-3 rounded" style="background: #161b22; border: 1px solid #30363d;">
+                    <span class="text-light">${sectionData}</span>
+                  </div>`;
+                }
+                
+                detailsHtml += `</div></div></div>`;
+                idx++;
+              }
+              
+              detailsHtml += '</div>';
+            } else {
+              // Fallback to basic item display
+              detailsHtml += `
+                <div class="card" style="background: #161b22; border: 1px solid #30363d;">
+                  <div class="card-header" style="background: #1c2128; border-bottom: 1px solid #30363d;">
+                    <h6 class="mb-0 text-light"><i class="bi bi-list-ul me-2"></i>Basic Information</h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="row g-2">`;
+              
+              Object.entries(item).forEach(([key, value]) => {
+                if (value === null || value === undefined) return;
+                const formattedValue = formatValue(value, key);
+                detailsHtml += `
+                  <div class="col-md-6">
+                    <div class="p-3 rounded" style="background: #0d1117; border-left: 3px solid #30363d;">
+                      <small class="text-muted d-block mb-1" style="font-size: 11px;">${formatKey(key)}</small>
+                      <span class="text-light" style="font-size: 13px;">${formattedValue}</span>
+                    </div>
+                  </div>`;
+              });
+              
+              detailsHtml += `</div></div></div>`;
+            }
+            
+            body.innerHTML = detailsHtml;
+            
+          } catch (error) {
+            body.innerHTML = `
+              <div class="alert alert-danger" style="background: #3d1b1b; border-color: #d1242f;">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>Error loading details:</strong> ${error.message}
+              </div>
+              <div class="card" style="background: #161b22; border: 1px solid #30363d;">
+                <div class="card-header" style="background: #1c2128;">
+                  <h6 class="mb-0 text-light">Basic Information (Cached)</h6>
+                </div>
+                <div class="card-body">
+                  <pre class="text-light" style="white-space:pre-wrap; background: #0d1117; padding: 15px; border-radius: 6px; margin: 0;">${JSON.stringify(item, null, 2)}</pre>
+                </div>
+              </div>`;
+          }
+        }
+
+        // Helper: Get resource state and badge
+        function getResourceState(item, details) {
+          const state = (item.state || item.status || details?.instance?.State?.Name || details?.instance?.status || '').toLowerCase();
+          let badge = '';
+          let icon = '';
+          
+          if (state.includes('running') || state.includes('active') || state.includes('available')) {
+            badge = '<span class="badge" style="background: #238636; font-size: 12px;"><i class="bi bi-circle-fill me-1"></i>Running</span>';
+            icon = '<div class="text-success" style="font-size: 48px;"><i class="bi bi-check-circle-fill"></i></div>';
+          } else if (state.includes('stopped') || state.includes('deallocated')) {
+            badge = '<span class="badge" style="background: #6e7681; font-size: 12px;"><i class="bi bi-stop-circle-fill me-1"></i>Stopped</span>';
+            icon = '<div class="text-secondary" style="font-size: 48px;"><i class="bi bi-pause-circle-fill"></i></div>';
+          } else if (state.includes('pending') || state.includes('starting')) {
+            badge = '<span class="badge" style="background: #9e6a03; font-size: 12px;"><i class="bi bi-hourglass-split me-1"></i>Pending</span>';
+            icon = '<div class="text-warning" style="font-size: 48px;"><i class="bi bi-hourglass-split"></i></div>';
+          } else if (state) {
+            badge = `<span class="badge bg-info" style="font-size: 12px;">${state}</span>`;
+            icon = '<div class="text-info" style="font-size: 48px;"><i class="bi bi-info-circle-fill"></i></div>';
+          }
+          
+          return { badge, icon };
+        }
+
+        // Helper: Get section icon
+        function getSectionIcon(section) {
+          const s = section.toLowerCase();
+          if (s.includes('security') || s.includes('groups')) return '<i class="bi bi-shield-lock-fill text-warning me-2"></i>';
+          if (s.includes('network') || s.includes('interfaces')) return '<i class="bi bi-diagram-3-fill text-info me-2"></i>';
+          if (s.includes('disk') || s.includes('volume') || s.includes('storage')) return '<i class="bi bi-hdd-fill text-primary me-2"></i>';
+          if (s.includes('tag')) return '<i class="bi bi-tags-fill text-success me-2"></i>';
+          if (s.includes('snapshot')) return '<i class="bi bi-camera-fill text-secondary me-2"></i>';
+          if (s.includes('monitor')) return '<i class="bi bi-graph-up text-danger me-2"></i>';
+          if (s.includes('metadata') || s.includes('label')) return '<i class="bi bi-journal-text text-info me-2"></i>';
+          if (s.includes('instance') || s.includes('database')) return '<i class="bi bi-server text-primary me-2"></i>';
+          return '<i class="bi bi-folder2-open text-muted me-2"></i>';
+        }
+
+        // Helper: Check if field is important
+        function isImportantField(key) {
+          const k = key.toLowerCase();
+          return k.includes('state') || k.includes('status') || k.includes('type') || 
+                 k.includes('size') || k.includes('engine') || k.includes('version') || 
+                 k.includes('region') || k.includes('zone') || k.includes('location');
+        }
+
+        // Helper: Format value for display
+        function formatValue(value, key, depth = 0) {
+          if (value === null || value === undefined) return '<span class="text-muted">-</span>';
+          if (typeof value === 'boolean') return value ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>';
+          
+          if (typeof value === 'object') {
+            // Prevent infinite recursion
+            if (depth > 3) {
+              const jsonStr = JSON.stringify(value, null, 2);
+              return `<pre class="mb-0 p-2" style="background: #0d1117; border-radius: 4px; font-size: 10px; max-height: 200px; overflow-y: auto;">${jsonStr}</pre>`;
+            }
+            
+            // Handle arrays
+            if (Array.isArray(value)) {
+              if (value.length === 0) return '<span class="text-muted">Empty array</span>';
+              
+              // Check if array contains primitives
+              const allPrimitives = value.every(v => typeof v !== 'object' || v === null);
+              
+              if (allPrimitives) {
+                // Simple list for primitive arrays
+                return `<div class="mt-1">` + value.map(v => 
+                  `<span class="badge bg-secondary me-1 mb-1" style="font-size: 11px;">${v}</span>`
+                ).join('') + '</div>';
+              }
+              
+              // Collapsible for complex arrays
+              const uniqueId = 'arr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+              let html = `<details style="cursor: pointer;" class="mt-1">
+                <summary class="text-primary" style="font-size: 12px;">
+                  <i class="bi bi-list-ul me-1"></i>Show ${value.length} items
+                </summary>
+                <div class="mt-2" style="border-left: 2px solid #30363d; padding-left: 12px;">`;
+              
+              value.forEach((item, idx) => {
+                if (typeof item === 'object' && item !== null) {
+                  html += `<div class="mb-3 p-2 rounded" style="background: #0d1117;">
+                    <small class="badge bg-primary mb-2" style="font-size: 10px;">Item ${idx + 1}</small>`;
+                  
+                  Object.entries(item).forEach(([k, v]) => {
+                    html += `<div class="mb-1">
+                      <small class="text-muted d-block" style="font-size: 10px;">${formatKey(k)}</small>
+                      <div style="font-size: 11px;">${formatValue(v, k, depth + 1)}</div>
+                    </div>`;
+                  });
+                  
+                  html += '</div>';
+                } else {
+                  html += `<div class="mb-1" style="font-size: 11px;">${formatValue(item, '', depth + 1)}</div>`;
+                }
+              });
+              
+              html += '</div></details>';
+              return html;
+            }
+            
+            // Handle objects
+            const keys = Object.keys(value);
+            if (keys.length === 0) return '<span class="text-muted">Empty object</span>';
+            
+            // For small objects (1-3 properties), show inline
+            if (keys.length <= 3 && depth < 2) {
+              let html = '<div class="mt-1" style="border-left: 2px solid #30363d; padding-left: 8px;">';
+              Object.entries(value).forEach(([k, v]) => {
+                html += `<div class="mb-1">
+                  <small class="text-muted" style="font-size: 10px;">${formatKey(k)}:</small>
+                  <span style="font-size: 11px; margin-left: 4px;">${formatValue(v, k, depth + 1)}</span>
+                </div>`;
+              });
+              html += '</div>';
+              return html;
+            }
+            
+            // For larger objects, make collapsible
+            const uniqueId = 'obj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            let html = `<details style="cursor: pointer;" class="mt-1">
+              <summary class="text-primary" style="font-size: 12px;">
+                <i class="bi bi-braces me-1"></i>Show ${keys.length} properties
+              </summary>
+              <div class="mt-2" style="border-left: 2px solid #30363d; padding-left: 12px;">`;
+            
+            Object.entries(value).forEach(([k, v]) => {
+              html += `<div class="mb-2 p-2 rounded" style="background: #0d1117;">
+                <small class="text-muted d-block mb-1" style="font-size: 10px;">${formatKey(k)}</small>
+                <div style="font-size: 11px;">${formatValue(v, k, depth + 1)}</div>
+              </div>`;
+            });
+            
+            html += '</div></details>';
+            return html;
+          }
+          
+          const str = String(value);
+          
+          // Add badges for status values
+          const lower = str.toLowerCase();
+          if (lower === 'running' || lower === 'active' || lower === 'available') {
+            return '<span class="badge" style="background: #238636;">✓ ' + str + '</span>';
+          }
+          if (lower === 'stopped' || lower === 'inactive' || lower === 'deallocated') {
+            return '<span class="badge bg-secondary">● ' + str + '</span>';
+          }
+          if (lower === 'pending' || lower === 'starting') {
+            return '<span class="badge" style="background: #9e6a03;">⟳ ' + str + '</span>';
+          }
+          if (lower === 'error' || lower === 'failed') {
+            return '<span class="badge bg-danger">✗ ' + str + '</span>';
+          }
+          
+          // Format timestamps
+          if ((key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) && !isNaN(Date.parse(str))) {
+            const date = new Date(str);
+            return `${str}<br><small class="text-muted" style="font-size: 10px;">${date.toLocaleString()}</small>`;
+          }
+          
+          // Truncate very long strings
+          if (str.length > 150) {
+            return `<details style="cursor: pointer;">
+              <summary class="text-primary" style="font-size: 11px;">Show full text (${str.length} chars)</summary>
+              <div class="mt-1 p-2 rounded" style="background: #0d1117; font-size: 11px; word-break: break-all;">${str}</div>
+            </details>`;
+          }
+          
+          return str;
         }
 
         // Generate cloud console link templates for common resources
@@ -321,6 +673,110 @@
                 .split(' ')
                 .map(w => w.charAt(0).toUpperCase() + w.slice(1))
                 .join(' ');
+        }
+
+        function renderBillingTab(data) {
+            const provider = (data.provider || 'aws').toLowerCase();
+            const resources = data.resources || {};
+            
+            let html = `
+            <div style="max-width: 900px; margin: 20px 0;">
+              <div class="alert alert-info" style="background: #1c4f7c; border-color: #0d6efd;">
+                <h5 style="margin-top: 0; color: #fff;">Real-Time Billing Data</h5>
+                <p style="margin-bottom: 0; color: #e9ecef;">
+                  This application does not currently have direct access to real-time billing data from your cloud provider.
+                  To view detailed cost breakdowns and current month charges, please use your cloud provider's native billing portal:
+                </p>
+              </div>
+
+              <div class="row mt-3 mb-4">
+                <div class="col-md-6">
+                  <div style="background: #212529; border: 1px solid #495057; border-radius: 8px; padding: 20px; text-align: center;">
+                    <h6 style="color: #e9ecef; margin-bottom: 15px;">View Billing Dashboard</h6>
+            `;
+
+            if (provider === 'aws') {
+                html += `<a href="https://console.aws.amazon.com/billing/home" target="_blank" class="btn btn-primary btn-sm">AWS Billing Console</a>`;
+            } else if (provider === 'azure') {
+                html += `<a href="https://portal.azure.com/#blade/Microsoft_Azure_Billing/BillingMenuBlade/Overview" target="_blank" class="btn btn-primary btn-sm">Azure Cost Management</a>`;
+            } else if (provider === 'gcp') {
+                html += `<a href="https://console.cloud.google.com/billing" target="_blank" class="btn btn-primary btn-sm">GCP Billing</a>`;
+            } else {
+                html += `<p class="text-muted">Select a provider to view billing dashboard</p>`;
+            }
+
+            html += `
+                    <p class="text-muted mt-3" style="font-size: 12px; margin-bottom: 0;">
+                      Click to open your cloud provider's billing dashboard
+                    </p>
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div style="background: #212529; border: 1px solid #495057; border-radius: 8px; padding: 20px;">
+                    <h6 style="color: #e9ecef; margin-bottom: 15px;">Resource Summary</h6>
+            `;
+
+            // Count resources by type
+            let totalResources = 0;
+            let countByType = {};
+            
+            for (const category in resources) {
+              for (const resourceType in resources[category]) {
+                if (Array.isArray(resources[category][resourceType])) {
+                  const count = resources[category][resourceType].filter(r => {
+                    const isStopped = r.state && ['stopped', 'deallocated', 'terminated', 'offline'].some(s => r.state.toLowerCase().includes(s));
+                    return !isStopped;
+                  }).length;
+                  if (count > 0) {
+                    totalResources += count;
+                    countByType[formatKey(resourceType)] = (countByType[formatKey(resourceType)] || 0) + count;
+                  }
+                }
+              }
+            }
+
+            html += `<p style="color: #adb5bd; margin: 5px 0;"><strong>Active Resources:</strong> <span style="color: #0d6efd;">${totalResources}</span></p>`;
+
+            for (const type in countByType) {
+              html += `<p style="color: #adb5bd; margin: 5px 0; font-size: 13px;">• ${type}: ${countByType[type]}</p>`;
+            }
+
+            html += `
+                  </div>
+                </div>
+              </div>
+
+              <div class="alert alert-warning" style="background: #664d0a; border-color: #ffc107; color: #fff;">
+                <h6 style="margin-bottom: 10px; color: #fff;">Estimated Cost Calculation</h6>
+                <p style="margin: 5px 0; font-size: 13px;">
+                  Accurate cost estimation requires real-time usage metrics and pricing data from your cloud provider.
+                  We recommend setting up cost alerts in your billing console to monitor spending.
+                </p>
+                <p style="margin: 5px 0; font-size: 13px;">
+                  For detailed cost analysis, consider using your cloud provider's cost management tools:
+                </p>
+                <ul style="margin: 10px 0; padding-left: 20px; font-size: 13px;">
+                  <li><strong>AWS:</strong> AWS Cost Explorer, Budgets, and Trusted Advisor</li>
+                  <li><strong>Azure:</strong> Cost Analysis and Budget Alerts in Cost Management</li>
+                  <li><strong>GCP:</strong> Billing Reports and Cost Control Tools</li>
+                </ul>
+              </div>
+
+              <div style="background: #212529; border: 1px solid #495057; border-radius: 8px; padding: 20px; margin-top: 20px;">
+                <h6 style="color: #e9ecef; margin-bottom: 15px;">Cost Optimization Tips</h6>
+                <ul style="color: #adb5bd; margin-bottom: 0;">
+                  <li>Stop or terminate unused resources to reduce costs</li>
+                  <li>Review resource sizing and scale down oversized instances</li>
+                  <li>Use reserved instances or commitments for long-running services</li>
+                  <li>Enable auto-scaling for variable workloads</li>
+                  <li>Monitor unused storage and delete old snapshots/backups</li>
+                  <li>Set up billing alerts to catch unexpected cost increases</li>
+                </ul>
+              </div>
+            </div>
+            `;
+            return html;
         }
 
         function switchTab(event, tab) {
