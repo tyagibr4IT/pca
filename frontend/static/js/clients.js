@@ -285,7 +285,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     paginatedClients.forEach((c, idx) => {
       const meta = c.metadata_json || {};
       const providerName = meta.provider || 'aws';
-      const providerIcon = providerName === 'aws' ? '☁️' : providerName === 'azure' ? '⊞' : '🔴';
       
       const col = document.createElement('div');
       col.className = 'col-md-6 col-lg-4';
@@ -294,7 +293,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <span class="provider-badge ${providerName}">${providerName.toUpperCase()}</span>
           
           <div class="client-card-header">
-            <div class="client-card-icon">${providerIcon}</div>
+            <div class="client-card-icon icon-${providerName}"><i class="bi bi-cloud-fill"></i></div>
             <h5 class="client-card-title">${c.name}</h5>
           </div>
           
@@ -313,16 +312,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button class="action-btn btn btn-sm btn-outline-light admin-only" data-act="edit" data-id="${c.id}" title="Edit">
               <i class="bi bi-pencil-fill"></i> Edit
             </button>
-            <button class="action-btn btn btn-sm btn-outline-info" data-act="view" data-id="${c.id}" title="View Details">
-              <i class="bi bi-eye-fill"></i> View
-            </button>
             <button class="action-btn btn btn-sm btn-outline-primary" data-act="metrics" data-id="${c.id}" title="View Metrics">
               <i class="bi bi-graph-up"></i> Metrics
             </button>
             <button class="action-btn btn btn-sm btn-outline-success" data-act="chat" data-id="${c.id}" title="Open Chat">
               <i class="bi bi-chat-dots-fill"></i> Chat
             </button>
-            <button class="action-btn btn btn-sm btn-danger admin-only" data-act="delete" data-id="${c.id}" title="Delete">
+            <button class="action-btn btn btn-sm btn-outline-danger admin-only" data-act="delete" data-id="${c.id}" title="Delete">
               <i class="bi bi-trash-fill"></i> Delete
             </button>
           </div>

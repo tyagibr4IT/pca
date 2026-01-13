@@ -49,7 +49,16 @@
         align-items: center;
         justify-content: center;
         font-size: 24px;
-        background: linear-gradient(135deg, #1f6feb 0%, #1158c7 100%);
+        color: white;
+      }
+      .client-card-icon.icon-aws {
+        background: linear-gradient(135deg, #FF9900 0%, #ec7211 100%);
+      }
+      .client-card-icon.icon-azure {
+        background: linear-gradient(135deg, #0078D4 0%, #005a9e 100%);
+      }
+      .client-card-icon.icon-gcp {
+        background: linear-gradient(135deg, #EA4335 0%, #c5221f 100%);
       }
       .client-card-title {
         flex: 1;
@@ -85,19 +94,21 @@
       .client-card-actions {
         display: flex;
         gap: 8px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        overflow-x: auto;
       }
       .action-btn {
-        flex: 1;
-        min-width: 80px;
-        padding: 8px 12px;
+        flex: 1 1 auto;
+        min-width: 70px;
+        padding: 8px 10px;
         border-radius: 6px;
-        font-size: 12px;
+        font-size: 11px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
+        gap: 4px;
         transition: all 0.2s;
+        white-space: nowrap;
       }
       .action-btn:hover {
         transform: translateY(-1px);

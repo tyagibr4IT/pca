@@ -118,6 +118,7 @@
                   <button class="tab" onclick="switchTab(event, 'storage')">Storage</button>
                   <button class="tab" onclick="switchTab(event, 'networking')">Networking</button>
                   <button class="tab" onclick="switchTab(event, 'security')">Security</button>
+                  <button class="tab" onclick="switchTab(event, 'api')">API</button>
                   <button class="tab" onclick="switchTab(event, 'analytics')">Analytics</button>
                   <button class="tab" onclick="switchTab(event, 'messaging')">Messaging</button>
                   <button class="tab" onclick="switchTab(event, 'billing')">Billing & Costs</button>
@@ -146,6 +147,11 @@
                 <!-- Security Resources -->
                 <div id="security" class="tab-content">
                   <div id="security-content"></div>
+                </div>
+
+                <!-- API Resources -->
+                <div id="api" class="tab-content">
+                  <div id="api-content"></div>
                 </div>
 
                 <!-- Analytics Resources -->
@@ -207,7 +213,7 @@
         function renderResources(data) {
             const resources = data.resources || {};
 
-            ['compute', 'database', 'storage', 'networking', 'security', 'analytics', 'messaging'].forEach(category => {
+            ['compute', 'database', 'storage', 'networking', 'security', 'api', 'analytics', 'messaging'].forEach(category => {
                 const categoryData = resources[category] || {};
                 const content = document.getElementById(`${category}-content`);
                 let html = '';
@@ -368,7 +374,7 @@
                               style="background: #161b22; color: #e6edf3; border: none; font-size: 14px; padding: 12px 16px;">
                         ${sectionIcon} <strong>${formatKey(section)}</strong>
                         <span class="badge bg-secondary ms-2" style="font-size: 10px;">
-                          ${Array.isArray(sectionData) ? sectionData.length + ' items' : typeof sectionData === 'object' ? Object.keys(sectionData).length + ' properties' : ''}
+                          ${Array.isArray(sectionData) ? sectionData.length + ' items' : typeof sectionData === 'object' && sectionData !== null ? Object.keys(sectionData).length + ' properties' : ''}
                         </span>
                       </button>
                     </h2>

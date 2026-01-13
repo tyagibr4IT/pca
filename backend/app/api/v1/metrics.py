@@ -84,8 +84,10 @@ async def fetch_aws_resources(client_id: int, credentials: dict):
                 "compute": {"ec2": [], "asg": [], "lambda": [], "ecs": [], "eks": []},
                 "database": {"rds": [], "dynamodb": [], "elasticache": []},
                 "storage": {"s3": [], "ebs": []},
-                "networking": {"vpc": [], "sg": [], "elb": [], "cloudfront": []},
+                "networking": {"vpc": [], "sg": [], "elb": [], "cloudfront": [], "route53": []},
                 "security": {"iam": [], "kms": []},
+                "messaging": {"sns": [], "sqs": []},
+                "api": {"api_gateway": []},
                 "error": "Missing AWS credentials"
             }
 
@@ -113,13 +115,19 @@ async def fetch_aws_resources(client_id: int, credentials: dict):
         iam = session.client("iam", config=config)
         kms = session.client("kms", config=config)
         cloudfront = session.client("cloudfront", config=config)
+        route53 = session.client("route53", config=config)
+        apigateway = session.client("apigateway", config=config)
+        sns = session.client("sns", config=config)
+        sqs = session.client("sqs", config=config)
 
         result = {
             "compute": {"ec2": [], "asg": [], "lambda": [], "ecs": [], "eks": []},
             "database": {"rds": [], "dynamodb": [], "elasticache": []},
             "storage": {"s3": [], "ebs": []},
-            "networking": {"vpc": [], "sg": [], "elb": [], "cloudfront": []},
+            "networking": {"vpc": [], "sg": [], "elb": [], "cloudfront": [], "route53": []},
             "security": {"iam": [], "kms": []},
+            "messaging": {"sns": [], "sqs": []},
+            "api": {"api_gateway": []},
         }
 
         # EC2 Instances
@@ -289,11 +297,64 @@ async def fetch_aws_resources(client_id: int, credentials: dict):
         try:
             dist = cloudfront.list_distributions().get("DistributionList", {})
             result["networking"]["cloudfront"] = [
-                {"id": d.get("Id"), "domain": d.get("DomainName")} 
+                {"id": d.get("Id"), "domain": d.get("DomainName"), "status": d.get("Status")} 
                 for d in dist.get("Items", [])
             ]
         except Exception as e:
             print(f"Error fetching AWS CloudFront: {e}")
+
+        # Route53 Hosted Zones
+        try:
+            zones = route53.list_hosted_zones().get("HostedZones", [])
+            for zone in zones:
+                result["networking"]["route53"].append({
+                    "id": zone.get("Id"),
+                    "name": zone.get("Name"),
+                    "record_count": zone.get("ResourceRecordSetCount"),
+                    "private": zone.get("Config", {}).get("PrivateZone", False)
+                })
+        except Exception as e:
+            print(f"Error fetching AWS Route53: {e}")
+
+        # API Gateway REST APIs
+        try:
+            apis = apigateway.get_rest_apis().get("items", [])
+            for api in apis:
+                result["api"]["api_gateway"].append({
+                    "id": api.get("id"),
+                    "name": api.get("name"),
+                    "endpoint": api.get("endpointConfiguration", {}).get("types", [])[0] if api.get("endpointConfiguration", {}).get("types") else "N/A",
+                    "created": api.get("createdDate")
+                })
+        except Exception as e:
+            print(f"Error fetching AWS API Gateway: {e}")
+
+        # SNS Topics
+        try:
+            topics = sns.list_topics().get("Topics", [])
+            for topic in topics:
+                arn = topic.get("TopicArn")
+                attrs = sns.get_topic_attributes(TopicArn=arn).get("Attributes", {})
+                result["messaging"]["sns"].append({
+                    "name": arn.split(":")[-1],
+                    "arn": arn,
+                    "subscriptions": attrs.get("SubscriptionsConfirmed", "0")
+                })
+        except Exception as e:
+            print(f"Error fetching AWS SNS: {e}")
+
+        # SQS Queues
+        try:
+            queues = sqs.list_queues().get("QueueUrls", [])
+            for queue_url in queues:
+                attrs = sqs.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["All"]).get("Attributes", {})
+                result["messaging"]["sqs"].append({
+                    "name": queue_url.split("/")[-1],
+                    "url": queue_url,
+                    "messages": attrs.get("ApproximateNumberOfMessages", "0")
+                })
+        except Exception as e:
+            print(f"Error fetching AWS SQS: {e}")
 
         # IAM Users & Roles
         try:
