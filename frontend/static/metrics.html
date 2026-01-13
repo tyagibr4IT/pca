@@ -121,6 +121,7 @@
                   <button class="tab" onclick="switchTab(event, 'api')">API</button>
                   <button class="tab" onclick="switchTab(event, 'analytics')">Analytics</button>
                   <button class="tab" onclick="switchTab(event, 'messaging')">Messaging</button>
+                  <button class="tab" onclick="switchTab(event, 'recommendations')">Recommendations</button>
                   <button class="tab" onclick="switchTab(event, 'billing')">Billing & Costs</button>
                 </div>
 
@@ -162,6 +163,15 @@
                 <!-- Messaging Resources -->
                 <div id="messaging" class="tab-content">
                   <div id="messaging-content"></div>
+                </div>
+
+                <!-- Recommendations -->
+                <div id="recommendations" class="tab-content">
+                  <div id="recommendations-loading" style="display: none; text-align: center; padding: 40px;">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p class="text-light">Analyzing resources and generating recommendations...</p>
+                  </div>
+                  <div id="recommendations-content"></div>
                 </div>
 
                 <!-- Billing & Costs -->
@@ -785,12 +795,175 @@
             return html;
         }
 
+        async function loadRecommendations() {
+            const loadingDiv = document.getElementById('recommendations-loading');
+            const contentDiv = document.getElementById('recommendations-content');
+            
+            loadingDiv.style.display = 'block';
+            contentDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`/api/metrics/recommendations/${clientId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                renderRecommendations(data);
+            } catch (error) {
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Error loading recommendations:</strong> ${error.message}
+                    </div>`;
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        function renderRecommendations(data) {
+            const contentDiv = document.getElementById('recommendations-content');
+            const recommendations = data.recommendations || [];
+            const summary = data.summary || {};
+            
+            if (recommendations.length === 0) {
+                contentDiv.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-check-circle" style="font-size: 48px; color: #238636;"></i>
+                        <h4 class="text-light mt-3">All Good!</h4>
+                        <p class="text-muted">No optimization recommendations at this time.</p>
+                    </div>`;
+                return;
+            }
+            
+            let html = '<div style="margin-bottom: 30px;">';
+            
+            // Summary Cards
+            html += '<div class="row g-3 mb-4">';
+            html += `
+                <div class="col-md-3">
+                    <div class="card text-center" style="background: #161b22; border: 1px solid #30363d;">
+                        <div class="card-body">
+                            <h2 class="text-light mb-1">${summary.total_recommendations || 0}</h2>
+                            <p class="text-muted mb-0" style="font-size: 13px;">Total Recommendations</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center" style="background: #3d1b1b; border: 1px solid #d1242f;">
+                        <div class="card-body">
+                            <h2 class="text-danger mb-1">${summary.by_severity?.critical || 0}</h2>
+                            <p class="text-muted mb-0" style="font-size: 13px;">Critical Issues</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center" style="background: #3d2b1b; border: 1px solid #e09b13;">
+                        <div class="card-body">
+                            <h2 class="text-warning mb-1">${summary.by_severity?.high || 0}</h2>
+                            <p class="text-muted mb-0" style="font-size: 13px;">High Priority</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center" style="background: #1b3d1b; border: 1px solid #238636;">
+                        <div class="card-body">
+                            <h2 class="text-success mb-1">$${summary.total_potential_savings_monthly?.toFixed(2) || '0.00'}</h2>
+                            <p class="text-muted mb-0" style="font-size: 13px;">Potential Savings/Month</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            html += '</div>';
+            
+            // Recommendations List
+            recommendations.forEach((rec, idx) => {
+                const severityColors = {
+                    'critical': { bg: '#3d1b1b', border: '#d1242f', badge: 'bg-danger' },
+                    'high': { bg: '#3d2b1b', border: '#e09b13', badge: 'bg-warning' },
+                    'medium': { bg: '#2b2b3d', border: '#6c757d', badge: 'bg-secondary' },
+                    'low': { bg: '#1b2b3d', border: '#0d6efd', badge: 'bg-info' }
+                };
+                
+                const categoryIcons = {
+                    'cost': 'bi-cash-coin',
+                    'security': 'bi-shield-lock',
+                    'reliability': 'bi-heartbeat',
+                    'operational': 'bi-gear',
+                    'performance': 'bi-speedometer2'
+                };
+                
+                const colors = severityColors[rec.severity] || severityColors['low'];
+                const icon = categoryIcons[rec.category] || 'bi-info-circle';
+                
+                html += `
+                    <div class="card mb-3" style="background: ${colors.bg}; border: 1px solid ${colors.border}; border-left: 4px solid ${colors.border};">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <i class="bi ${icon}" style="font-size: 20px; color: ${colors.border};"></i>
+                                        <h5 class="text-light mb-0">${rec.title}</h5>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <span class="badge ${colors.badge}" style="font-size: 11px; text-transform: uppercase;">${rec.severity}</span>
+                                        <span class="badge bg-dark" style="font-size: 11px;">${rec.category}</span>
+                                        ${rec.estimated_savings > 0 ? `<span class="badge" style="background: #238636; font-size: 11px;"><i class="bi bi-piggy-bank"></i> $${rec.estimated_savings.toFixed(2)}/mo</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <p class="text-light mb-2" style="font-size: 14px;">${rec.description}</p>
+                            
+                            ${rec.impact ? `<p class="mb-2"><span class="badge" style="background: #1f6feb; font-size: 12px;"><i class="bi bi-exclamation-triangle"></i> Impact:</span> <span class="text-light" style="font-size: 13px;">${rec.impact}</span></p>` : ''}
+                            
+                            <div class="card mt-3" style="background: #0d1117; border: 1px solid #30363d;">
+                                <div class="card-body p-3">
+                                    <h6 class="text-light mb-2"><i class="bi bi-lightbulb text-warning"></i> Recommendation</h6>
+                                    <p class="text-muted mb-0" style="font-size: 13px;">${rec.recommendation}</p>
+                                </div>
+                            </div>
+                            
+                            ${rec.affected_resources && rec.affected_resources.length > 0 ? `
+                                <details class="mt-3" style="cursor: pointer;">
+                                    <summary class="text-muted" style="font-size: 13px; user-select: none;">
+                                        <i class="bi bi-list-ul"></i> Affected Resources (${rec.affected_resources.length})
+                                    </summary>
+                                    <div class="mt-2 p-3 rounded" style="background: #0d1117; border: 1px solid #30363d; max-height: 200px; overflow-y: auto;">
+                                        ${rec.affected_resources.map(res => {
+                                            const resName = res.name || res.id || res.bucket || 'Unknown';
+                                            const resDetails = Object.entries(res).filter(([k, v]) => k !== 'name' && k !== 'id').map(([k, v]) => `<span class="text-muted" style="font-size: 11px;">${k}: ${v}</span>`).join(' · ');
+                                            return `<div class="mb-2"><span class="text-light" style="font-size: 12px;">${resName}</span>${resDetails ? `<br>${resDetails}` : ''}</div>`;
+                                        }).join('')}
+                                    </div>
+                                </details>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            contentDiv.innerHTML = html;
+        }
+
         function switchTab(event, tab) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
 
             document.getElementById(tab).classList.add('active');
             event.target.classList.add('active');
+            
+            // Load recommendations when tab is switched to
+            if (tab === 'recommendations') {
+                const contentDiv = document.getElementById('recommendations-content');
+                if (!contentDiv.innerHTML.trim()) {
+                    loadRecommendations();
+                }
+            }
         }
 
         // Filter resources based on stopped/unused toggles

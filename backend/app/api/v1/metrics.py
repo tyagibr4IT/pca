@@ -1448,43 +1448,553 @@ async def get_optimization_recommendations(
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    # Placeholder recommendations (TODO: implement ML-based analysis)
-    recommendations = [
-        {
-            "type": "cost_savings",
-            "severity": "high",
-            "title": "Underutilized EC2 Instances",
-            "description": "2 instances running at <10% CPU for past 7 days",
-            "estimated_savings_monthly": 85.00,
-            "action": "Consider downsizing to t3.small or terminating"
-        },
-        {
-            "type": "performance",
-            "severity": "medium",
-            "title": "High Memory Usage on VM",
-            "description": "Instance i-abc123 consistently at 95% memory",
-            "estimated_savings_monthly": 0,
-            "action": "Upgrade to larger instance type"
-        },
-        {
-            "type": "cost_savings",
-            "severity": "low",
-            "title": "Unused Storage Volumes",
-            "description": "3 EBS volumes detached for >30 days",
-            "estimated_savings_monthly": 12.50,
-            "action": "Review and delete unused volumes"
-        }
-    ]
+    meta = client.metadata_json or {}
+    provider = (meta.get("provider") or "aws").lower()
     
-    total_potential_savings = sum(r["estimated_savings_monthly"] for r in recommendations if r["type"] == "cost_savings")
+    # Fetch all resources and analyze
+    try:
+        if provider == "aws":
+            resources = await fetch_aws_resources(client_id, meta)
+            recommendations = analyze_aws_resources(resources)
+        elif provider == "azure":
+            resources = await fetch_azure_resources(client_id, meta)
+            recommendations = analyze_azure_resources(resources)
+        elif provider == "gcp":
+            resources = await fetch_gcp_resources(client_id, meta)
+            recommendations = analyze_gcp_resources(resources)
+        else:
+            recommendations = []
+    except Exception as e:
+        recommendations = [{"category": "error", "severity": "high", "title": "Analysis Error", "description": str(e), "affected_resources": [], "recommendation": "Check cloud credentials", "estimated_savings": 0}]
+    
+    # Calculate summary
+    summary = {
+        "total_recommendations": len(recommendations),
+        "by_category": {},
+        "by_severity": {},
+        "total_potential_savings_monthly": 0
+    }
+    
+    for rec in recommendations:
+        cat = rec.get('category', 'other')
+        sev = rec.get('severity', 'low')
+        summary['by_category'][cat] = summary['by_category'].get(cat, 0) + 1
+        summary['by_severity'][sev] = summary['by_severity'].get(sev, 0) + 1
+        summary['total_potential_savings_monthly'] += rec.get('estimated_savings', 0)
+    
+    # Sort by severity priority
+    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+    recommendations.sort(key=lambda x: severity_order.get(x.get('severity', 'low'), 3))
     
     return {
         "client_id": client_id,
         "client_name": client.name,
+        "provider": provider,
         "recommendations": recommendations,
-        "summary": {
-            "total_recommendations": len(recommendations),
-            "high_severity": sum(1 for r in recommendations if r["severity"] == "high"),
-            "total_potential_savings_monthly": total_potential_savings
-        }
+        "summary": summary
     }
+
+
+def analyze_aws_resources(resources: dict) -> list:
+    """Analyze AWS resources and generate recommendations"""
+    recommendations = []
+    rec_id = 1
+    
+    # Cost Optimization: Stopped EC2 Instances
+    ec2_instances = resources.get("compute", {}).get("ec2", [])
+    stopped_instances = [i for i in ec2_instances if i.get("state", "").lower() in ["stopped", "stopping"]]
+    if stopped_instances:
+        # Estimate EBS cost (assume 30GB per instance at $0.10/GB/month)
+        estimated_cost = len(stopped_instances) * 30 * 0.10
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "cost",
+            "severity": "high" if estimated_cost > 50 else "medium",
+            "title": f"{len(stopped_instances)} Stopped EC2 Instance(s)",
+            "description": f"EC2 instances in stopped state still incur EBS storage costs",
+            "impact": f"Potential savings: ${estimated_cost:.2f}/month",
+            "affected_resources": [{"id": i.get("id"), "name": i.get("name", "N/A"), "type": i.get("type", "N/A")} for i in stopped_instances],
+            "recommendation": "Create AMI for backup and terminate instances, or start if still needed",
+            "estimated_savings": estimated_cost
+        })
+        rec_id += 1
+    
+    # Security: Unencrypted S3 Buckets
+    s3_buckets = resources.get("storage", {}).get("s3", [])
+    unencrypted_buckets = [b for b in s3_buckets if not b.get("encryption")]
+    if unencrypted_buckets:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "security",
+            "severity": "high",
+            "title": f"{len(unencrypted_buckets)} Unencrypted S3 Bucket(s)",
+            "description": "S3 buckets without server-side encryption are vulnerable to data breaches",
+            "impact": "Data security risk",
+            "affected_resources": [{"bucket": b.get("bucket") or b.get("name"), "region": b.get("region", "N/A")} for b in unencrypted_buckets],
+            "recommendation": "Enable AES-256 or AWS KMS encryption on all buckets",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Security: S3 Buckets without Versioning
+    no_versioning = [b for b in s3_buckets if not b.get("versioning")]
+    if no_versioning:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "reliability",
+            "severity": "medium",
+            "title": f"{len(no_versioning)} S3 Bucket(s) Without Versioning",
+            "description": "Buckets without versioning cannot recover from accidental deletions or overwrites",
+            "impact": "Data loss risk",
+            "affected_resources": [{"bucket": b.get("bucket") or b.get("name"), "region": b.get("region", "N/A")} for b in no_versioning],
+            "recommendation": "Enable versioning on all critical S3 buckets",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Reliability: RDS without Multi-AZ
+    rds_instances = resources.get("database", {}).get("rds", [])
+    single_az_rds = [db for db in rds_instances if not db.get("multi_az")]
+    if single_az_rds:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "reliability",
+            "severity": "high",
+            "title": f"{len(single_az_rds)} RDS Instance(s) Without Multi-AZ",
+            "description": "Single-AZ RDS instances have no automatic failover capability",
+            "impact": "High availability risk during AZ failures",
+            "affected_resources": [{"id": db.get("id") or db.get("identifier"), "engine": db.get("engine", "N/A"), "size": db.get("size") or db.get("type", "N/A")} for db in single_az_rds],
+            "recommendation": "Enable Multi-AZ deployment for production databases",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Security: Security Groups with Wide-Open Access
+    security_groups = resources.get("networking", {}).get("security_groups", [])
+    open_sgs = []
+    for sg in security_groups:
+        for rule in sg.get("rules", []):
+            if rule.get("cidr") == "0.0.0.0/0" and rule.get("from_port") not in [80, 443]:
+                open_sgs.append(sg)
+                break
+    if open_sgs:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "security",
+            "severity": "critical",
+            "title": f"{len(open_sgs)} Security Group(s) with Open Access",
+            "description": "Security groups allowing 0.0.0.0/0 on non-standard ports expose resources to internet",
+            "impact": "Critical security vulnerability",
+            "affected_resources": [{"id": sg.get("id"), "name": sg.get("name", "N/A")} for sg in open_sgs],
+            "recommendation": "Restrict ingress rules to specific IP ranges or security groups",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Operational Excellence: Resources without Tags
+    all_resources = []
+    for category in resources.values():
+        if isinstance(category, dict):
+            for resource_list in category.values():
+                if isinstance(resource_list, list):
+                    all_resources.extend(resource_list)
+    
+    untagged = [r for r in all_resources if not r.get("tags") or len(r.get("tags", [])) == 0]
+    if len(untagged) > 5:  # Only report if significant number
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "operational",
+            "severity": "low",
+            "title": f"{len(untagged)} Resource(s) Without Tags",
+            "description": "Resources without proper tags are difficult to manage and track costs",
+            "impact": "Poor resource management and cost allocation",
+            "affected_resources": [{"id": r.get("id") or r.get("name", "unknown"), "type": r.get("type", "unknown")} for r in untagged[:10]],
+            "recommendation": "Implement tagging strategy with Environment, Owner, and CostCenter tags",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Cost: Lambda functions with high error rates (if we have metrics)
+    lambda_functions = resources.get("compute", {}).get("lambda", [])
+    if lambda_functions:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "operational",
+            "severity": "low",
+            "title": f"{len(lambda_functions)} Lambda Function(s) Found",
+            "description": "Review Lambda functions for optimization opportunities",
+            "impact": "Potential cost and performance improvements",
+            "affected_resources": [{"name": f.get("name"), "runtime": f.get("runtime", "N/A")} for f in lambda_functions[:5]],
+            "recommendation": "Monitor Lambda execution time and memory usage for right-sizing",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    return recommendations
+
+
+def analyze_azure_resources(resources: dict) -> list:
+    """Analyze Azure resources and generate recommendations"""
+    recommendations = []
+    rec_id = 1
+    
+    # Cost: Stopped VMs still incurring charges
+    vms = resources.get("compute", {}).get("vm", [])
+    stopped_vms = [v for v in vms if v.get("state", "").lower() in ["stopped", "deallocated"]]
+    if stopped_vms:
+        estimated_cost = len(stopped_vms) * 25  # Average Azure VM disk cost
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "cost",
+            "severity": "high" if estimated_cost > 50 else "medium",
+            "title": f"{len(stopped_vms)} Stopped Virtual Machine(s)",
+            "description": "Deallocated VMs still incur managed disk storage costs",
+            "impact": f"Potential savings: ${estimated_cost:.2f}/month",
+            "affected_resources": [{"name": v.get("id"), "size": v.get("size", "N/A"), "location": v.get("location", "N/A")} for v in stopped_vms],
+            "recommendation": "Delete VMs and create snapshots if no longer needed, or start if still required",
+            "estimated_savings": estimated_cost
+        })
+        rec_id += 1
+    
+    # Security: Unencrypted Storage Accounts
+    storage_accounts = resources.get("storage", {}).get("storage_account", [])
+    # Note: Azure storage accounts have encryption enabled by default
+    # This check is for awareness - all accounts should exist
+    unencrypted = []  # Placeholder - would need detailed encryption config check
+    if unencrypted:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "security",
+            "severity": "high",
+            "title": f"{len(unencrypted)} Unencrypted Storage Account(s)",
+            "description": "Storage accounts without encryption expose data to security risks",
+            "impact": "Data security vulnerability",
+            "affected_resources": [{"name": s.get("account"), "location": s.get("location", "N/A"), "sku": s.get("sku", "N/A")} for s in unencrypted],
+            "recommendation": "Enable Azure Storage Service Encryption (SSE) for all storage accounts",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Reliability: SQL Databases without Geo-Replication
+    sql_databases = resources.get("database", {}).get("sql", [])
+    # Note: Geo-replication check would need additional API call
+    no_geo_replication = []  # Placeholder
+    if no_geo_replication:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "reliability",
+            "severity": "high",
+            "title": f"{len(no_geo_replication)} SQL Database(s) Without Geo-Replication",
+            "description": "Databases without geo-replication have no automatic failover to secondary region",
+            "impact": "Data loss risk during regional outages",
+            "affected_resources": [{"name": db.get("id"), "engine": db.get("engine", "N/A"), "sku": db.get("sku", "N/A")} for db in no_geo_replication],
+            "recommendation": "Enable active geo-replication for production databases",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Security: Public Blob Containers
+    blob_containers = []
+    for sa in storage_accounts:
+        containers = sa.get("containers", [])
+        for container in containers:
+            if container.get("public_access") not in [None, "off", "None"]:
+                blob_containers.append({"storage_account": sa.get("name"), "container": container.get("name")})
+    
+    if blob_containers:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "security",
+            "severity": "critical",
+            "title": f"{len(blob_containers)} Blob Container(s) with Public Access",
+            "description": "Containers allowing public access can lead to data exposure",
+            "impact": "Critical data security risk",
+            "affected_resources": blob_containers,
+            "recommendation": "Disable public access and use Shared Access Signatures (SAS) or Azure AD authentication",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Operational: Resources without Tags
+    all_resources = []
+    for category in resources.values():
+        if isinstance(category, dict):
+            for resource_list in category.values():
+                if isinstance(resource_list, list):
+                    all_resources.extend(resource_list)
+    
+    untagged = [r for r in all_resources if not r.get("tags") or len(r.get("tags", {})) == 0]
+    if len(untagged) > 5:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "operational",
+            "severity": "low",
+            "title": f"{len(untagged)} Resource(s) Without Tags",
+            "description": "Resources without tags are difficult to manage, track costs, and organize",
+            "impact": "Poor resource governance and cost allocation",
+            "affected_resources": [{"name": r.get("name", "unknown"), "type": r.get("type", "unknown")} for r in untagged[:10]],
+            "recommendation": "Implement tagging policy with Environment, Owner, CostCenter, and Project tags",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Cost: Unattached Managed Disks
+    disks = resources.get("storage", {}).get("disks", [])
+    unattached = [d for d in disks if d.get("unused") or not d.get("managed_by")]
+    if unattached:
+        total_gb = sum(d.get("size_gb", 50) for d in unattached)
+        estimated_cost = total_gb * 0.05  # ~$0.05/GB/month for standard SSD
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "cost",
+            "severity": "medium",
+            "title": f"{len(unattached)} Unattached Managed Disk(s)",
+            "description": "Unattached disks continue to incur storage costs",
+            "impact": f"Potential savings: ${estimated_cost:.2f}/month",
+            "affected_resources": [{"name": d.get("id"), "size_gb": d.get("size_gb", "N/A"), "location": d.get("location", "N/A")} for d in unattached],
+            "recommendation": "Delete unused disks or create snapshots and delete the disks",
+            "estimated_savings": estimated_cost
+        })
+        rec_id += 1
+    
+    # Cost: Old Snapshots
+    snapshots = resources.get("storage", {}).get("snapshots", [])
+    if snapshots:
+        from datetime import datetime, timedelta
+        old_snapshots = []
+        for snap in snapshots:
+            created = snap.get("time_created")
+            if created:
+                try:
+                    created_date = datetime.fromisoformat(str(created).replace('Z', '+00:00'))
+                    if (datetime.now(created_date.tzinfo) - created_date).days > 90:
+                        old_snapshots.append(snap)
+                except:
+                    pass
+        
+        if old_snapshots:
+            estimated_cost = len(old_snapshots) * 5  # Rough estimate for snapshot storage
+            recommendations.append({
+                "id": f"rec_{rec_id}",
+                "category": "cost",
+                "severity": "medium",
+                "title": f"{len(old_snapshots)} Old Snapshot(s) (>90 days)",
+                "description": "Old snapshots continue to incur storage costs",
+                "impact": f"Potential savings: ${estimated_cost:.2f}/month",
+                "affected_resources": [{"name": s.get("name"), "created": s.get("time_created", "N/A")} for s in old_snapshots[:10]],
+                "recommendation": "Review and delete snapshots older than 90 days if no longer needed",
+                "estimated_savings": estimated_cost
+            })
+            rec_id += 1
+    
+    # Performance: VMs with High CPU Usage (placeholder - would need metrics)
+    running_vms = [v for v in vms if v.get("state", "").lower() == "running"]
+    if running_vms:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "operational",
+            "severity": "low",
+            "title": f"{len(running_vms)} Running Virtual Machine(s)",
+            "description": "Monitor VM performance metrics for optimization opportunities",
+            "impact": "Potential cost and performance improvements",
+            "affected_resources": [{"name": v.get("id"), "size": v.get("size", "N/A")} for v in running_vms[:5]],
+            "recommendation": "Review Azure Monitor metrics for CPU, memory, and disk usage to right-size VMs",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    return recommendations
+
+
+def analyze_gcp_resources(resources: dict) -> list:
+    """Analyze GCP resources and generate recommendations"""
+    recommendations = []
+    rec_id = 1
+    
+    # Cost: Stopped Compute Instances
+    instances = resources.get("compute", {}).get("instances", [])
+    stopped = [i for i in instances if i.get("status", "").lower() in ["stopped", "terminated", "suspended"]]
+    if stopped:
+        estimated_cost = len(stopped) * 20  # Average persistent disk cost
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "cost",
+            "severity": "high" if estimated_cost > 50 else "medium",
+            "title": f"{len(stopped)} Stopped Compute Instance(s)",
+            "description": "Stopped instances still incur persistent disk costs",
+            "impact": f"Potential savings: ${estimated_cost:.2f}/month",
+            "affected_resources": [{"name": i.get("name"), "zone": i.get("zone", "N/A"), "machine_type": i.get("machine_type", "N/A")} for i in stopped],
+            "recommendation": "Delete instances and create snapshots if needed, or start if still required",
+            "estimated_savings": estimated_cost
+        })
+        rec_id += 1
+    
+    # Security: Public GCS Buckets
+    buckets = resources.get("storage", {}).get("buckets", [])
+    public_buckets = [b for b in buckets if b.get("public", False) or b.get("iam_configuration", {}).get("uniform_bucket_level_access", {}).get("enabled") == False]
+    if public_buckets:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "security",
+            "severity": "critical",
+            "title": f"{len(public_buckets)} Public Cloud Storage Bucket(s)",
+            "description": "Publicly accessible buckets can lead to data exposure and unauthorized access",
+            "impact": "Critical data security risk",
+            "affected_resources": [{"name": b.get("name"), "location": b.get("location", "N/A"), "storage_class": b.get("storage_class", "N/A")} for b in public_buckets],
+            "recommendation": "Remove public access, enable uniform bucket-level access, and use IAM for controlled access",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Security: Buckets without Encryption
+    unencrypted_buckets = [b for b in buckets if not b.get("encryption")]
+    if unencrypted_buckets:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "security",
+            "severity": "high",
+            "title": f"{len(unencrypted_buckets)} Unencrypted Cloud Storage Bucket(s)",
+            "description": "Buckets without customer-managed encryption keys (CMEK) use default encryption only",
+            "impact": "Data security best practice violation",
+            "affected_resources": [{"name": b.get("name"), "location": b.get("location", "N/A")} for b in unencrypted_buckets],
+            "recommendation": "Enable customer-managed encryption keys (CMEK) for sensitive data",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Reliability: Cloud SQL without High Availability
+    sql_instances = resources.get("database", {}).get("sql", [])
+    no_ha = [db for db in sql_instances if not db.get("settings", {}).get("availability_type") == "REGIONAL"]
+    if no_ha:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "reliability",
+            "severity": "high",
+            "title": f"{len(no_ha)} Cloud SQL Instance(s) Without High Availability",
+            "description": "Instances without regional availability have no automatic failover capability",
+            "impact": "Downtime risk during zone failures",
+            "affected_resources": [{"name": db.get("name"), "region": db.get("region", "N/A"), "tier": db.get("tier", "N/A")} for db in no_ha],
+            "recommendation": "Enable high availability (regional) configuration for production databases",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Security: Firewall Rules with Open Access
+    firewall_rules = resources.get("networking", {}).get("firewall_rules", [])
+    open_rules = []
+    for rule in firewall_rules:
+        source_ranges = rule.get("source_ranges", [])
+        if "0.0.0.0/0" in source_ranges:
+            # Check if it's not just HTTP/HTTPS
+            allowed = rule.get("allowed", [])
+            for allow in allowed:
+                ports = allow.get("ports", [])
+                if ports and not all(p in ["80", "443"] for p in ports):
+                    open_rules.append(rule)
+                    break
+    
+    if open_rules:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "security",
+            "severity": "critical",
+            "title": f"{len(open_rules)} Firewall Rule(s) with Wide-Open Access",
+            "description": "Firewall rules allowing 0.0.0.0/0 on non-standard ports expose resources to internet",
+            "impact": "Critical security vulnerability",
+            "affected_resources": [{"name": r.get("name"), "network": r.get("network", "N/A")} for r in open_rules],
+            "recommendation": "Restrict source IP ranges to specific CIDR blocks or use Identity-Aware Proxy",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Operational: Resources without Labels
+    all_resources = []
+    for category in resources.values():
+        if isinstance(category, dict):
+            for resource_list in category.values():
+                if isinstance(resource_list, list):
+                    all_resources.extend(resource_list)
+    
+    unlabeled = [r for r in all_resources if not r.get("labels") or len(r.get("labels", {})) == 0]
+    if len(unlabeled) > 5:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "operational",
+            "severity": "low",
+            "title": f"{len(unlabeled)} Resource(s) Without Labels",
+            "description": "Resources without labels are difficult to organize and track costs",
+            "impact": "Poor resource management and cost attribution",
+            "affected_resources": [{"name": r.get("name", "unknown"), "type": r.get("type", "unknown")} for r in unlabeled[:10]],
+            "recommendation": "Implement labeling strategy with environment, owner, cost-center, and project labels",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    # Cost: Unattached Persistent Disks
+    disks = resources.get("storage", {}).get("disks", [])
+    unattached = [d for d in disks if not d.get("users") or len(d.get("users", [])) == 0]
+    if unattached:
+        total_gb = sum(d.get("size_gb", 50) for d in unattached)
+        estimated_cost = total_gb * 0.04  # $0.04/GB/month for standard persistent disks
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "cost",
+            "severity": "medium",
+            "title": f"{len(unattached)} Unattached Persistent Disk(s)",
+            "description": "Unattached disks continue to incur storage costs",
+            "impact": f"Potential savings: ${estimated_cost:.2f}/month",
+            "affected_resources": [{"name": d.get("name"), "size_gb": d.get("size_gb", "N/A"), "zone": d.get("zone", "N/A")} for d in unattached],
+            "recommendation": "Delete unused disks or create snapshots and delete the disks",
+            "estimated_savings": estimated_cost
+        })
+        rec_id += 1
+    
+    # Cost: Old Snapshots
+    snapshots = resources.get("storage", {}).get("snapshots", [])
+    if snapshots:
+        from datetime import datetime, timedelta
+        old_snapshots = []
+        for snap in snapshots:
+            created = snap.get("creation_timestamp")
+            if created:
+                try:
+                    created_date = datetime.fromisoformat(str(created).replace('Z', '+00:00'))
+                    if (datetime.now(created_date.tzinfo) - created_date).days > 90:
+                        old_snapshots.append(snap)
+                except:
+                    pass
+        
+        if old_snapshots:
+            total_gb = sum(s.get("storage_bytes", 0) / (1024**3) for s in old_snapshots)
+            estimated_cost = total_gb * 0.026  # $0.026/GB/month for snapshots
+            recommendations.append({
+                "id": f"rec_{rec_id}",
+                "category": "cost",
+                "severity": "medium",
+                "title": f"{len(old_snapshots)} Old Snapshot(s) (>90 days)",
+                "description": "Old snapshots continue to incur storage costs",
+                "impact": f"Potential savings: ${estimated_cost:.2f}/month",
+                "affected_resources": [{"name": s.get("name"), "created": s.get("creation_timestamp", "N/A")} for s in old_snapshots[:10]],
+                "recommendation": "Review and delete snapshots older than 90 days if no longer needed",
+                "estimated_savings": estimated_cost
+            })
+            rec_id += 1
+    
+    # Performance: Monitor running instances
+    running_instances = [i for i in instances if i.get("status", "").lower() == "running"]
+    if running_instances:
+        recommendations.append({
+            "id": f"rec_{rec_id}",
+            "category": "operational",
+            "severity": "low",
+            "title": f"{len(running_instances)} Running Compute Instance(s)",
+            "description": "Review Cloud Monitoring metrics for optimization opportunities",
+            "impact": "Potential cost and performance improvements",
+            "affected_resources": [{"name": i.get("name"), "machine_type": i.get("machine_type", "N/A")} for i in running_instances[:5]],
+            "recommendation": "Use Cloud Monitoring to analyze CPU, memory, and disk metrics for right-sizing",
+            "estimated_savings": 0
+        })
+        rec_id += 1
+    
+    return recommendations
+
