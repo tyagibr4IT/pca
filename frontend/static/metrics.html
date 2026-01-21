@@ -800,6 +800,13 @@
             const contentDiv = document.getElementById('recommendations-content');
             
             loadingDiv.style.display = 'block';
+            loadingDiv.innerHTML = `
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p class="text-light">Analyzing resources and generating recommendations...</p>
+                    <p class="text-muted" style="font-size: 12px;"><i class="bi bi-stars"></i> AI insights are being generated for high-value recommendations</p>
+                </div>
+            `;
             contentDiv.innerHTML = '';
             
             try {
@@ -879,6 +886,24 @@
             `;
             html += '</div>';
             
+            // AI Enhancement Banner
+            const aiEnhancedCount = recommendations.filter(r => r.ai_enhanced).length;
+            if (aiEnhancedCount > 0) {
+                html += `
+                    <div class="alert mt-3 mb-3" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%); border: 1px solid #667eea; border-radius: 8px;">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-stars text-light me-2" style="font-size: 24px;"></i>
+                            <div>
+                                <strong class="text-light">AI-Powered Analysis Complete</strong>
+                                <p class="text-muted mb-0" style="font-size: 13px;">
+                                    ${aiEnhancedCount} high-value recommendation${aiEnhancedCount > 1 ? 's' : ''} enhanced with deep insights, specific actions, and risk assessments
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
             // Recommendations List
             recommendations.forEach((rec, idx) => {
                 const severityColors = {
@@ -912,6 +937,7 @@
                                         <span class="badge ${colors.badge}" style="font-size: 11px; text-transform: uppercase;">${rec.severity}</span>
                                         <span class="badge bg-dark" style="font-size: 11px;">${rec.category}</span>
                                         ${rec.estimated_savings > 0 ? `<span class="badge" style="background: #238636; font-size: 11px;"><i class="bi bi-piggy-bank"></i> $${rec.estimated_savings.toFixed(2)}/mo</span>` : ''}
+                                        ${rec.ai_enhanced ? `<span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-size: 11px;"><i class="bi bi-stars"></i> AI Insights</span>` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -919,6 +945,42 @@
                             <p class="text-light mb-2" style="font-size: 14px;">${rec.description}</p>
                             
                             ${rec.impact ? `<p class="mb-2"><span class="badge" style="background: #1f6feb; font-size: 12px;"><i class="bi bi-exclamation-triangle"></i> Impact:</span> <span class="text-light" style="font-size: 13px;">${rec.impact}</span></p>` : ''}
+                            
+                            ${rec.ai_enhanced && rec.ai_insight ? `
+                                <div class="card mt-3 mb-3" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border: 1px solid #667eea;">
+                                    <div class="card-body p-3">
+                                        <h6 class="mb-2" style="color: #a78bfa;"><i class="bi bi-stars"></i> AI-Powered Insights</h6>
+                                        
+                                        ${rec.ai_insight.insight ? `
+                                            <div class="mb-2">
+                                                <strong class="text-light" style="font-size: 12px;">Deep Insight:</strong>
+                                                <p class="text-muted mb-0" style="font-size: 12px;">${rec.ai_insight.insight}</p>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        ${rec.ai_insight.action ? `
+                                            <div class="mb-2">
+                                                <strong class="text-light" style="font-size: 12px;">Specific Action:</strong>
+                                                <p class="text-muted mb-0" style="font-size: 12px;">${rec.ai_insight.action}</p>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        ${rec.ai_insight.risks ? `
+                                            <div class="mb-2">
+                                                <strong class="text-warning" style="font-size: 12px;"><i class="bi bi-shield-exclamation"></i> Risk Assessment:</strong>
+                                                <p class="text-muted mb-0" style="font-size: 12px;">${rec.ai_insight.risks}</p>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        ${rec.ai_insight.roi ? `
+                                            <div>
+                                                <strong class="text-success" style="font-size: 12px;"><i class="bi bi-graph-up"></i> ROI Timeline:</strong>
+                                                <p class="text-muted mb-0" style="font-size: 12px;">${rec.ai_insight.roi}</p>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            ` : ''}
                             
                             <div class="card mt-3" style="background: #0d1117; border: 1px solid #30363d;">
                                 <div class="card-body p-3">

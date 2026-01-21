@@ -7,6 +7,8 @@ from sqlalchemy import select, desc
 from app.auth.jwt import get_current_user
 from datetime import datetime, timedelta
 import asyncio
+import os
+import json
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from azure.identity import ClientSecretCredential
@@ -17,6 +19,11 @@ from azure.mgmt.resource import ResourceManagementClient
 from azure.core.exceptions import HttpResponseError
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
+
+# In-memory cache for LLM insights (24 hour TTL)
+llm_cache = {}
+LLM_CACHE_TTL = 86400  # 24 hours in seconds
+
 
 @router.get("/current")
 async def get_current_metrics(
@@ -1486,6 +1493,9 @@ async def get_optimization_recommendations(
     severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
     recommendations.sort(key=lambda x: severity_order.get(x.get('severity', 'low'), 3))
     
+    # Enhance high-value recommendations with LLM insights
+    recommendations = await enhance_recommendations_with_llm(recommendations, provider, resources)
+    
     return {
         "client_id": client_id,
         "client_name": client.name,
@@ -1997,4 +2007,156 @@ def analyze_gcp_resources(resources: dict) -> list:
         rec_id += 1
     
     return recommendations
+
+
+async def enhance_recommendations_with_llm(recommendations: list, provider: str, resources: dict) -> list:
+    """
+    Enhance high-value recommendations with LLM insights
+    Only analyzes recommendations with estimated_savings > $50 or severity critical/high
+    Uses caching to minimize API calls
+    """
+    try:
+        from openai import AsyncOpenAI
+        
+        # Check if OpenAI API key is available
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key.strip() == "":
+            print("OpenAI API key not configured, skipping LLM enhancement")
+            return recommendations
+        
+        client = AsyncOpenAI(api_key=api_key)
+        
+        # Filter high-value recommendations for LLM analysis
+        high_value_recs = [
+            rec for rec in recommendations
+            if rec.get("estimated_savings", 0) > 50 or rec.get("severity") in ["critical", "high"]
+        ]
+        
+        if not high_value_recs:
+            return recommendations
+        
+        # Check cache
+        cache_key = f"{provider}_{len(recommendations)}_{sum(r.get('estimated_savings', 0) for r in recommendations)}"
+        now = datetime.now()
+        
+        if cache_key in llm_cache:
+            cached_data, cached_time = llm_cache[cache_key]
+            if (now - cached_time).total_seconds() < LLM_CACHE_TTL:
+                print(f"Using cached LLM insights for {provider}")
+                # Merge cached insights back into recommendations
+                for rec in recommendations:
+                    if rec["id"] in cached_data:
+                        rec["ai_insight"] = cached_data[rec["id"]]
+                        rec["ai_enhanced"] = True
+                return recommendations
+        
+        # Prepare context for LLM
+        resource_summary = {
+            "provider": provider,
+            "total_resources": sum(
+                len(items) if isinstance(items, list) else 0
+                for category in resources.values()
+                if isinstance(category, dict)
+                for items in category.values()
+            ),
+            "categories": list(resources.keys()),
+            "high_value_recommendations": len(high_value_recs),
+            "total_potential_savings": sum(r.get("estimated_savings", 0) for r in recommendations)
+        }
+        
+        # Build prompt
+        prompt = f"""You are a cloud cost optimization expert. Analyze these {provider.upper()} recommendations and provide actionable insights.
+
+Resource Summary:
+- Total Resources: {resource_summary['total_resources']}
+- Total Potential Savings: ${resource_summary['total_potential_savings']:.2f}/month
+
+High-Priority Recommendations to Enhance:
+"""
+        
+        for rec in high_value_recs[:5]:  # Limit to top 5 to save tokens
+            prompt += f"\n{rec['id']}. {rec['title']}\n"
+            prompt += f"   Category: {rec['category']} | Severity: {rec['severity']}\n"
+            prompt += f"   Current: {rec['description']}\n"
+            prompt += f"   Savings: ${rec.get('estimated_savings', 0):.2f}/month\n"
+            prompt += f"   Affected: {len(rec.get('affected_resources', []))} resources\n"
+        
+        prompt += """
+For each recommendation, provide:
+1. **Deep Insight**: Why this matters beyond obvious cost savings
+2. **Specific Action**: Exact steps to implement (be technical and specific)
+3. **Risk Assessment**: What could go wrong and how to mitigate
+4. **ROI Timeline**: How long until savings are realized
+
+Format as JSON array with structure:
+[{"id": "rec_1", "insight": "...", "action": "...", "risks": "...", "roi": "..."}]
+
+Keep each field under 200 characters. Focus on high-impact, actionable advice.
+"""
+        
+        # Call OpenAI with timeout
+        try:
+            response = await asyncio.wait_for(
+                client.chat.completions.create(
+                    model="gpt-4o-mini",  # Cheap and fast
+                    messages=[
+                        {"role": "system", "content": "You are a FinOps expert specializing in cloud cost optimization. Provide concise, actionable insights."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=1500,
+                    response_format={"type": "json_object"}
+                ),
+                timeout=10.0  # 10 second timeout
+            )
+            
+            # Parse response
+            content = response.choices[0].message.content
+            llm_insights = json.loads(content)
+            
+            # Handle both array and object responses
+            if isinstance(llm_insights, dict) and "recommendations" in llm_insights:
+                llm_insights = llm_insights["recommendations"]
+            elif isinstance(llm_insights, dict) and not isinstance(list(llm_insights.values())[0] if llm_insights else None, dict):
+                # Convert dict to array format
+                llm_insights = [{"id": k, **v} for k, v in llm_insights.items()]
+            
+            # Cache the insights
+            cached_insights = {}
+            for insight in llm_insights:
+                rec_id = insight.get("id")
+                if rec_id:
+                    cached_insights[rec_id] = {
+                        "insight": insight.get("insight", ""),
+                        "action": insight.get("action", ""),
+                        "risks": insight.get("risks", ""),
+                        "roi": insight.get("roi", "")
+                    }
+            
+            llm_cache[cache_key] = (cached_insights, now)
+            
+            # Merge insights into recommendations
+            for rec in recommendations:
+                if rec["id"] in cached_insights:
+                    rec["ai_insight"] = cached_insights[rec["id"]]
+                    rec["ai_enhanced"] = True
+            
+            print(f"LLM enhanced {len(cached_insights)} recommendations for {provider}")
+            
+        except asyncio.TimeoutError:
+            print("LLM request timed out, returning original recommendations")
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse LLM response: {e}")
+        except Exception as e:
+            print(f"LLM API error: {e}")
+        
+        return recommendations
+        
+    except ImportError:
+        print("OpenAI package not installed, skipping LLM enhancement")
+        return recommendations
+    except Exception as e:
+        print(f"LLM enhancement failed: {e}")
+        return recommendations
+
 
