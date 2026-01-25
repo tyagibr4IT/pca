@@ -1,7 +1,7 @@
 // clients-modal.js
 // Handles Add/Edit Client modal - integrates with backend API and test endpoint
 (function(){
-  const API_BASE = 'http://localhost:8000/api';
+  const API_BASE = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
   const modalEl = document.getElementById('clientModal');
   const saveBtn = document.getElementById('modalSaveClient');
   const testBtn = document.getElementById('modalTestConn');

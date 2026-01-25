@@ -46,17 +46,20 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-async def get_chat_history(tenant_id: int, limit: int = 50) -> List[dict]:
-    """Load recent chat messages from database"""
+async def get_chat_history(tenant_id: int, limit: int = 20, offset: int = 0) -> List[dict]:
+    """Load chat messages from database with pagination"""
+    print(f"[DEBUG] get_chat_history called with tenant_id={tenant_id}, limit={limit}, offset={offset}")
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(ChatMessage)
             .where(ChatMessage.tenant_id == tenant_id)
             .order_by(desc(ChatMessage.timestamp))
             .limit(limit)
+            .offset(offset)
         )
         messages = result.scalars().all()
-        return [
+        print(f"[DEBUG] Query returned {len(messages)} messages")
+        msg_list = [
             {
                 "sender": msg.sender,
                 "message": msg.message,
@@ -65,6 +68,8 @@ async def get_chat_history(tenant_id: int, limit: int = 50) -> List[dict]:
             }
             for msg in reversed(messages)
         ]
+        print(f"[DEBUG] Returning {len(msg_list)} messages after reversal")
+        return msg_list
 
 async def save_chat_message(tenant_id: int, sender: str, message: str, metadata: dict = None):
     """Save a chat message to database with optional embedding"""
@@ -282,15 +287,20 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
     await manager.connect(websocket, client_id)
     
-    # Send chat history on connection
+    # Send initial chat history on connection (most recent 20 messages)
     try:
-        history = await get_chat_history(int(client_id), limit=50)
+        history = await get_chat_history(int(client_id), limit=20, offset=0)
+        print(f"[WebSocket] Loading {len(history)} messages for client {client_id}")
         await websocket.send_json({
             "type": "history",
-            "messages": history
+            "messages": history,
+            "hasMore": len(history) == 20  # If we got full page, there might be more
         })
+        print(f"[WebSocket] Sent {len(history)} messages to client {client_id}, hasMore={len(history) == 20}")
     except Exception as e:
         print(f"Error loading chat history: {e}")
+        import traceback
+        traceback.print_exc()
     
     try:
         while True:
@@ -316,7 +326,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             
             # Generate AI response
             try:
-                history = await get_chat_history(int(client_id), limit=20)
+                history = await get_chat_history(int(client_id), limit=20, offset=0)
                 ai_response = await generate_ai_response(int(client_id), user_message, history)
                 
                 # Save AI response
@@ -346,3 +356,26 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         manager.disconnect(websocket, client_id)
     except Exception as e:
         manager.disconnect(websocket, client_id)
+
+
+@router.get("/history/{tenant_id}")
+async def get_history(
+    tenant_id: int,
+    limit: int = 20,
+    offset: int = 0,
+    token: dict = Depends(decode_token)
+):
+    """
+    Get paginated chat history for a tenant.
+    Returns messages in chronological order (oldest first within the page).
+    """
+    try:
+        messages = await get_chat_history(tenant_id, limit=limit, offset=offset)
+        return {
+            "messages": messages,
+            "limit": limit,
+            "offset": offset,
+            "count": len(messages)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

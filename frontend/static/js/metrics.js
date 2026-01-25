@@ -1,5 +1,5 @@
 // Metrics page script — fetches real-time cloud metrics from backend API
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
 
 function getToken(){
   try { return localStorage.getItem('token'); } catch(e){ return null; }

@@ -13,7 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // If on login page but already logged in, optionally go to clients
     if (isLoginPage && token) {
       // quick sanity check by calling /auth/me; ignore failures
-      fetch('http://localhost:8000/api/auth/me', {
+      const apiBase = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
+      fetch(`${apiBase}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       }).then(r => {
         if (r.ok) {
@@ -37,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if(btn) btn.addEventListener('click', signOut);
 
   // Auto-refresh access token before expiry (simple interval)
-  const API_BASE = 'http://localhost:8000/api';
+  const API_BASE = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
   const REFRESH_INTERVAL_MS = 12 * 60 * 1000; // refresh every 12 minutes
   function scheduleRefresh(){
     const token = localStorage.getItem('token');

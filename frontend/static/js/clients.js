@@ -1,5 +1,5 @@
 // Client management UI - integrated with backend API
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
 function getAuthHeaders(){
   const token = localStorage.getItem('token');
   return {

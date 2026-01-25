@@ -1,5 +1,5 @@
 // Dashboard quick stats and user info
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
 
 async function loadCurrentUser(){
   const token = localStorage.getItem('token');
