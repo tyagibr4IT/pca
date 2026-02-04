@@ -114,7 +114,7 @@ async def list_users(db: AsyncSession = Depends(get_db), current_user: dict = De
     ]
 
 @router.post("/", response_model=UserResponse)
-async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["admin"]))):
+async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["superadmin", "admin"]))):
     """Create a new user"""
     # In production, hash the password
     user = User(
@@ -156,7 +156,7 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db), current_use
     )
 
 @router.put("/{user_id}", response_model=UserResponse)
-async def update_user(user_id: int, payload: UserUpdate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["admin"]))):
+async def update_user(user_id: int, payload: UserUpdate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["superadmin", "admin"]))):
     """Update a user"""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -193,7 +193,7 @@ async def update_user(user_id: int, payload: UserUpdate, db: AsyncSession = Depe
     )
 
 @router.delete("/{user_id}")
-async def delete_user(user_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["admin"]))):
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["superadmin", "admin"]))):
     """Delete a user"""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -309,7 +309,7 @@ async def update_user_client_permissions(
     user_id: int,
     payload: UserClientPermissionsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(["admin"]))
+    current_user: dict = Depends(require_role(["superadmin", "admin"]))
 ):
     """Update all client permissions for a user (replaces existing permissions)"""
     # Verify user exists
