@@ -3071,16 +3071,22 @@ async def enhance_recommendations_with_llm(recommendations: list, provider: str,
         # enhanced now contains AI insights for high-value items
     """
     try:
-        from openai import AsyncOpenAI
+        from app.config import settings
+        from app.services.openai_client import get_async_openai_client
         
-        # Check if OpenAI API key is configured in environment
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key or api_key.strip() == "":
-            print("OpenAI API key not configured, skipping LLM enhancement")
-            return recommendations  # Return unchanged if no API key
+        # Check if OpenAI API key is configured
+        if settings.OPENAI_PROVIDER == "azure":
+            if not settings.AZURE_CLIENT_ID or not settings.AZURE_CLIENT_SECRET:
+                print("Azure OpenAI not configured, skipping LLM enhancement")
+                return recommendations
+        else:
+            api_key = settings.OPENAI_API_KEY
+            if not api_key or api_key.strip() == "":
+                print("OpenAI API key not configured, skipping LLM enhancement")
+                return recommendations  # Return unchanged if no API key
         
-        # Initialize async OpenAI client
-        client = AsyncOpenAI(api_key=api_key)
+        # Initialize async OpenAI client using factory
+        client = await get_async_openai_client()
         
         # Filter recommendations for LLM analysis based on value threshold
         # Only process high-value items to optimize API costs

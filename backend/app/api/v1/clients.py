@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.db.database import get_db
-from app.models.models import Tenant
-from app.auth.jwt import get_current_user, require_role
+from app.models.models import Tenant, User, UserClientPermission
+from app.auth.jwt import get_current_user
+from app.auth.rbac import require_permission
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -34,9 +35,36 @@ class ClientResponse(BaseModel):
 
 @router.get("/", response_model=List[ClientResponse])
 async def list_clients(db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """List all clients (tenants)"""
-    result = await db.execute(select(Tenant))
-    clients = result.scalars().all()
+    """
+    List clients based on user role and assignments.
+    - superadmin: sees all clients
+    - admin/member: sees only assigned clients
+    """
+    from sqlalchemy.orm import selectinload
+    
+    # Get current user with role information
+    user_result = await db.execute(
+        select(User)
+        .options(selectinload(User.role_obj))
+        .where(User.id == current_user["user_id"])
+    )
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Superadmin sees all clients
+    if user.role_obj and user.role_obj.name == "superadmin":
+        result = await db.execute(select(Tenant))
+        clients = result.scalars().all()
+    else:
+        # Admin/member users see only their assigned clients
+        result = await db.execute(
+            select(Tenant)
+            .join(UserClientPermission, UserClientPermission.client_id == Tenant.id)
+            .where(UserClientPermission.user_id == current_user["user_id"])
+        )
+        clients = result.scalars().all()
+    
     return [
         ClientResponse(
             id=c.id,
@@ -48,7 +76,7 @@ async def list_clients(db: AsyncSession = Depends(get_db), current_user: dict = 
     ]
 
 @router.post("/", response_model=ClientResponse)
-async def create_client(payload: ClientCreate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["admin"]))):
+async def create_client(payload: ClientCreate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_permission("clients.create"))):
     """Create a new client (tenant)"""
     client = Tenant(name=payload.name, metadata_json=payload.metadata_json)
     db.add(client)
@@ -76,7 +104,7 @@ async def get_client(client_id: int, db: AsyncSession = Depends(get_db), current
     )
 
 @router.put("/{client_id}", response_model=ClientResponse)
-async def update_client(client_id: int, payload: ClientUpdate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["admin"]))):
+async def update_client(client_id: int, payload: ClientUpdate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_permission("clients.edit"))):
     """Update a client"""
     result = await db.execute(select(Tenant).where(Tenant.id == client_id))
     client = result.scalar_one_or_none()
@@ -98,7 +126,7 @@ async def update_client(client_id: int, payload: ClientUpdate, db: AsyncSession 
     )
 
 @router.delete("/{client_id}")
-async def delete_client(client_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_role(["admin"]))):
+async def delete_client(client_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(require_permission("clients.delete"))):
     """Delete a client"""
     result = await db.execute(select(Tenant).where(Tenant.id == client_id))
     client = result.scalar_one_or_none()

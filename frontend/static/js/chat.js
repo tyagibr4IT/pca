@@ -244,6 +244,9 @@
    * and initializes the chat connection.
    */
   async function init(){
+    // Load current user info for navbar dropdown
+    await window.loadCurrentUser();
+    
     // Load all clients for dropdown
     allClients = await loadClients();
     

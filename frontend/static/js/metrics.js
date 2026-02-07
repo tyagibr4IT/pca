@@ -14,6 +14,9 @@ function getAuthHeaders(){
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Load current user info for navbar dropdown
+  await window.loadCurrentUser();
+  
   const params = new URLSearchParams(window.location.search);
   const clientId = params.has('id') ? Number(params.get('id')) : null;
   const title = document.getElementById('metricsTitle');

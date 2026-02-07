@@ -38,7 +38,7 @@ Last Modified: 2026-01-25
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import auth as auth_routes, metrics as metrics_routes, clients as clients_routes, users as users_routes, chat as chat_routes
+from app.api.v1 import auth as auth_routes, metrics as metrics_routes, clients as clients_routes, users as users_routes, chat as chat_routes, permissions as permissions_routes
 from app.config import settings
 from app.workers import fetcher
 from app.workers.snapshot_scheduler import start_snapshot_scheduler
@@ -156,6 +156,7 @@ app.include_router(metrics_routes.router, prefix="/api")
 app.include_router(clients_routes.router, prefix="/api")
 app.include_router(users_routes.router, prefix="/api")
 app.include_router(chat_routes.router, prefix="/api")
+app.include_router(permissions_routes.router, prefix="/api")
 
 # Example in-app scheduler start for dev
 @app.on_event("startup")

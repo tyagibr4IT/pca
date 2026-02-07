@@ -9,3 +9,61 @@ html,body{height:100%;margin:0;font-family:system-ui,-apple-system,'Segoe UI',Ro
 
 /* Small card spacing override when using Bootstrap cards */
 .card.p-3{box-shadow:0 1px 3px rgba(16,24,40,0.05)}
+
+/* Permission Management Styles */
+.permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.permission-badge .permission-name {
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+.permission-badge .btn-remove {
+  background: none;
+  border: none;
+  color: #3730a3;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.permission-badge .btn-remove:hover {
+  opacity: 1;
+}
+
+.available-perm-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.available-perm-item:hover {
+  background: #f9fafb;
+  border-color: #3730a3;
+}
+
+.available-perm-item .btn-add {
+  flex-shrink: 0;
+}
+
+.permission-list {
+  min-height: 200px;
+}
+

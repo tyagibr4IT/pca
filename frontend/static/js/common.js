@@ -1,4 +1,35 @@
 // Common frontend helpers (sign out handler)
+
+// Global function to load current user and populate navbar
+window.loadCurrentUser = async function() {
+  const API_BASE = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
+  const token = localStorage.getItem('token');
+  if (!token) return null;
+  
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const user = await res.json();
+      
+      // Populate navbar dropdown elements if they exist
+      const navUsername = document.getElementById('navUsername');
+      const dropdownUsername = document.getElementById('dropdownUsername');
+      const dropdownRole = document.getElementById('dropdownRole');
+      
+      if (navUsername) navUsername.textContent = user.username || 'User';
+      if (dropdownUsername) dropdownUsername.textContent = user.username || 'User';
+      if (dropdownRole) dropdownRole.textContent = `Role: ${user.role || 'member'}`;
+      
+      return user;
+    }
+  } catch (e) {
+    console.error('Failed to load user:', e);
+  }
+  return null;
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   // Simple session guard: only allow login page without token
   try {

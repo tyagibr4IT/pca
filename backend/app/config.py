@@ -48,17 +48,26 @@ class Settings(BaseSettings):
         REDIS_URL (str): Redis connection string for caching
         KEYVAULT_NAME (str): Azure Key Vault name for production secrets
         
-        OpenAI Configuration:
-        OPENAI_API_TYPE (str): API type (openai/azure)
-        OPENAI_API_KEY (str): OpenAI API key for GPT models
+        OpenAI Provider Configuration:
+        OPENAI_PROVIDER (str): Provider type ('openai' or 'azure')
+        
+        Standard OpenAI Configuration:
+        OPENAI_API_KEY (str): Standard OpenAI API key
+        OPENAI_MODEL (str): Model name for chat completions
+        OPENAI_EMBEDDING_MODEL (str): Model name for embeddings
         
         Azure OpenAI Configuration:
-        AZURE_OPENAI_ENDPOINT (str): Azure OpenAI endpoint URL
-        AZURE_OPENAI_KEY (str): Azure OpenAI API key
-        AZURE_SEARCH_ENDPOINT (str): Azure Cognitive Search endpoint
-        AZURE_SEARCH_KEY (str): Azure Cognitive Search API key
+        AZURE_MODEL_ENDPOINT (str): Azure OpenAI endpoint URL
+        AZURE_API_VERSION (str): Azure OpenAI API version
+        AZURE_EMBEDDINGS_MODEL_NAME (str): Azure embeddings model name
+        AZURE_CHAT_MODEL_NAME (str): Azure chat model name
+        AZURE_PROJECT_ID (str): Azure project ID
+        AZURE_EMBEDDINGS_DEPLOYMENT_NAME (str): Azure embeddings deployment name
+        AZURE_CLIENT_ID (str): Azure AD client ID for OAuth
+        AZURE_CLIENT_SECRET (str): Azure AD client secret for OAuth
+        AZURE_TELEMETRY (bool): Enable/disable Azure telemetry
         
-        Azure AD Authentication:
+        Azure AD Authentication (for OIDC user login):
         AZURE_AD_TENANT_ID (str): Azure AD tenant ID for OIDC
         AZURE_AD_CLIENT_ID (str): Azure AD application/client ID
         AZURE_AD_CLIENT_SECRET (str): Azure AD client secret
@@ -85,14 +94,27 @@ class Settings(BaseSettings):
     APP_PORT: str = "8000"
     DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379/0"
-    KEYVAULT_NAME: str = None
-    OPENAI_API_TYPE: str = "openai"
+    
+    # OpenAI Provider Selection
+    OPENAI_PROVIDER: str = Field(default="openai")
+    
+    # Standard OpenAI Configuration
     OPENAI_API_KEY: str = None
-    AZURE_OPENAI_ENDPOINT: str = None
-    AZURE_OPENAI_KEY: str = None
-    AZURE_SEARCH_ENDPOINT: str = None
-    AZURE_SEARCH_KEY: str = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    
+    # Azure OpenAI Configuration
+    AZURE_MODEL_ENDPOINT: str = None
+    AZURE_API_VERSION: str = "2024-02-01"
+    AZURE_EMBEDDINGS_MODEL_NAME: str = None
+    AZURE_CHAT_MODEL_NAME: str = None
+    AZURE_PROJECT_ID: str = None
+    AZURE_EMBEDDINGS_DEPLOYMENT_NAME: str = None
+    AZURE_CLIENT_ID: str = None
+    AZURE_CLIENT_SECRET: str = None
+    AZURE_TELEMETRY: bool = False
 
+    # Azure AD Authentication (for OIDC user login)
     AZURE_AD_TENANT_ID: str = None
     AZURE_AD_CLIENT_ID: str = None
     AZURE_AD_CLIENT_SECRET: str = None

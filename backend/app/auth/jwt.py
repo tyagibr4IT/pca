@@ -22,13 +22,16 @@ Last Modified: 2026-01-25
 """
 
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Set
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import bcrypt
 from fastapi import Depends
 from app.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.db.database import get_db
 
 # HTTP Bearer token extractor for FastAPI dependency injection
 security = HTTPBearer()

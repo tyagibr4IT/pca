@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, device-scale=1.0">
+    <title>RBAC Testing Dashboard</title>
+    <link href="./vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 20px;
+        }
+        .test-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .test-result {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background: #1a472a; border-left: 4px solid #238636; }
+        .error { background: #4a1a1a; border-left: 4px solid #da3633; }
+        .info { background: #1a3a4a; border-left: 4px solid #1f6feb; }
+        .hidden-test { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">🧪 RBAC System Testing Dashboard</h1>
+        
+        <!-- Login Section -->
+        <div class="test-card">
+            <h3>1. Login & Load Permissions</h3>
+            <div class="mb-3">
+                <label class="form-label">Username:</label>
+                <input type="text" id="loginUsername" class="form-control" placeholder="testmember2" value="testmember2">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password:</label>
+                <input type="password" id="loginPassword" class="form-control" placeholder="Test123!" value="Test123!">
+            </div>
+            <button onclick="testLogin()" class="btn btn-primary">Login & Test Permissions</button>
+            <div id="loginResult" class="mt-3"></div>
+        </div>
+
+        <!-- Permission Check Tests -->
+        <div class="test-card">
+            <h3>2. Permission Check Tests</h3>
+            <button onclick="runPermissionTests()" class="btn btn-success">Run Permission Tests</button>
+            <div id="permissionTests" class="mt-3"></div>
+        </div>
+
+        <!-- UI Element Visibility Tests -->
+        <div class="test-card">
+            <h3>3. UI Element Visibility (data-require-permission)</h3>
+            
+            <!-- These elements should show/hide based on permissions -->
+            <div class="test-result info">
+                <strong>Member should see (users.view):</strong>
+                <button class="btn btn-sm btn-outline-light" data-require-permission="users.view">
+                    ✓ View Users (users.view)
+                </button>
+            </div>
+            
+            <div class="test-result info">
+                <strong>Member should NOT see (users.create):</strong>
+                <button class="btn btn-sm btn-outline-primary" data-require-permission="users.create">
+                    ✗ Create User (users.create)
+                </button>
+            </div>
+            
+            <div class="test-result info">
+                <strong>Member should NOT see (users.delete):</strong>
+                <button class="btn btn-sm btn-outline-danger" data-require-permission="users.delete">
+                    ✗ Delete User (users.delete)
+                </button>
+            </div>
+            
+            <div class="test-result info">
+                <strong>Member should see (clients.view):</strong>
+                <button class="btn btn-sm btn-outline-success" data-require-permission="clients.view">
+                    ✓ View Clients (clients.view)
+                </button>
+            </div>
+            
+            <button onclick="checkVisibility()" class="btn btn-warning mt-3">Verify Visibility Results</button>
+            <div id="visibilityResults" class="mt-3"></div>
+        </div>
+
+        <!-- Current Permissions Display -->
+        <div class="test-card">
+            <h3>4. Current User Permissions</h3>
+            <button onclick="showPermissions()" class="btn btn-info">Show My Permissions</button>
+            <div id="currentPermissions" class="mt-3"></div>
+        </div>
+    </div>
+
+    <script src="./vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="./js/config.js"></script>
+    <script src="./js/permissions.js"></script>
+    <script>
+        const API_BASE = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
+
+        async function testLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username, password })
+                });
+                
+                if (!response.ok) throw new Error('Login failed');
+                
+                const data = await response.json();
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('token', data.access_token);
+                
+                // Initialize permissions
+                await window.PermissionManager.initializePermissions();
+                
+                resultDiv.innerHTML = `
+                    <div class="test-result success">
+                        <strong>✅ Login Successful!</strong><br>
+                        User: ${data.user.username}<br>
+                        Role: ${data.user.role}<br>
+                        Permissions loaded: ${data.user.permissions.length}
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="test-result error">
+                        <strong>❌ Login Failed:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function runPermissionTests() {
+            const testsDiv = document.getElementById('permissionTests');
+            const permissions = window.PermissionManager.getUserPermissions();
+            
+            if (permissions.length === 0) {
+                testsDiv.innerHTML = '<div class="test-result error">❌ No permissions loaded. Login first!</div>';
+                return;
+            }
+            
+            const tests = [
+                { perm: 'users.view', expected: true, desc: 'Member should have users.view' },
+                { perm: 'users.create', expected: false, desc: 'Member should NOT have users.create' },
+                { perm: 'users.delete', expected: false, desc: 'Member should NOT have users.delete' },
+                { perm: 'clients.view', expected: true, desc: 'Member should have clients.view' },
+                { perm: 'clients.create', expected: false, desc: 'Member should NOT have clients.create' },
+                { perm: 'metrics.view', expected: true, desc: 'Member should have metrics.view' },
+                { perm: 'chat.access', expected: true, desc: 'Member should have chat.access' }
+            ];
+            
+            let html = '';
+            let passed = 0;
+            let failed = 0;
+            
+            tests.forEach(test => {
+                const hasPerm = window.PermissionManager.hasPermission(test.perm);
+                const success = hasPerm === test.expected;
+                
+                if (success) passed++;
+                else failed++;
+                
+                html += `
+                    <div class="test-result ${success ? 'success' : 'error'}">
+                        ${success ? '✅' : '❌'} ${test.desc}<br>
+                        <small>Expected: ${test.expected} | Got: ${hasPerm}</small>
+                    </div>
+                `;
+            });
+            
+            html = `
+                <div class="test-result info">
+                    <strong>Test Results:</strong> ${passed} passed, ${failed} failed
+                </div>
+            ` + html;
+            
+            testsDiv.innerHTML = html;
+        }
+
+        function checkVisibility() {
+            const resultsDiv = document.getElementById('visibilityResults');
+            const buttons = document.querySelectorAll('[data-require-permission]');
+            
+            let html = '<div class="test-result info"><strong>Visibility Check Results:</strong></div>';
+            
+            buttons.forEach(btn => {
+                const perm = btn.dataset.requirePermission;
+                const isVisible = btn.style.display !== 'none';
+                const shouldBeVisible = window.PermissionManager.hasPermission(perm);
+                const correct = isVisible === shouldBeVisible;
+                
+                html += `
+                    <div class="test-result ${correct ? 'success' : 'error'}">
+                        ${correct ? '✅' : '❌'} ${perm}: 
+                        Visible=${isVisible}, Should=${shouldBeVisible}
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        function showPermissions() {
+            const permsDiv = document.getElementById('currentPermissions');
+            const permissions = window.PermissionManager.getUserPermissions();
+            
+            if (permissions.length === 0) {
+                permsDiv.innerHTML = '<div class="test-result error">❌ No permissions loaded. Login first!</div>';
+                return;
+            }
+            
+            let html = '<div class="test-result success">';
+            html += `<strong>Your Permissions (${permissions.length} total):</strong><ul>`;
+            permissions.forEach(p => {
+                html += `<li>${p}</li>`;
+            });
+            html += '</ul></div>';
+            
+            permsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

@@ -8,26 +8,15 @@ function getAuthHeaders(){
   };
 }
 
-async function loadCurrentUser(){
-  const token = localStorage.getItem('token');
-  if(!token) return null;
-  try{
-    const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if(res.ok) return await res.json();
-  }catch(e){ console.error(e); }
-  return null;
-}
-
 document.addEventListener('DOMContentLoaded', async () => {
-  // Populate navbar dropdown and hide admin-only items
-  const user = await loadCurrentUser();
+  // Initialize permissions first
+  if (window.PermissionManager) {
+    await window.PermissionManager.initializePermissions();
+  }
+  
+  // Use global loadCurrentUser from common.js
+  const user = await window.loadCurrentUser();
   if(user){
-    document.getElementById('navUsername').textContent = user.username || 'User';
-    document.getElementById('dropdownUsername').textContent = user.username || 'User';
-    document.getElementById('dropdownRole').textContent = `Role: ${user.role || 'member'}`;
-    
     if(user.role !== 'admin'){
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     }
@@ -309,18 +298,26 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
           
           <div class="client-card-actions">
-            <button class="action-btn btn btn-sm btn-outline-light admin-only" data-act="edit" data-id="${c.id}" title="Edit">
+            ${window.PermissionManager?.hasPermission('clients.edit') ? `
+            <button class="action-btn btn btn-sm btn-outline-light" data-act="edit" data-id="${c.id}" title="Edit">
               <i class="bi bi-pencil-fill"></i> Edit
             </button>
+            ` : ''}
+            ${window.PermissionManager?.hasPermission('metrics.view') ? `
             <button class="action-btn btn btn-sm btn-outline-primary" data-act="metrics" data-id="${c.id}" title="View Metrics">
               <i class="bi bi-graph-up"></i> Metrics
             </button>
+            ` : ''}
+            ${window.PermissionManager?.hasPermission('chat.access') ? `
             <button class="action-btn btn btn-sm btn-outline-success" data-act="chat" data-id="${c.id}" title="Open Chat">
               <i class="bi bi-chat-dots-fill"></i> Chat
             </button>
-            <button class="action-btn btn btn-sm btn-outline-danger admin-only" data-act="delete" data-id="${c.id}" title="Delete">
+            ` : ''}
+            ${window.PermissionManager?.hasPermission('clients.delete') ? `
+            <button class="action-btn btn btn-sm btn-outline-danger" data-act="delete" data-id="${c.id}" title="Delete">
               <i class="bi bi-trash-fill"></i> Delete
             </button>
+            ` : ''}
           </div>
         </div>`;
       grid.appendChild(col);

@@ -93,6 +93,13 @@
       const initials = u.username ? u.username.substring(0, 2).toUpperCase() : 'U';
       const status = u.status || 'active'; // Default to active if not set
       
+      // Get current user role
+      const currentUser = window.loadCurrentUser ? window.loadCurrentUser() : null;
+      const currentUserRole = currentUser ? currentUser.role : null;
+      
+      // Members should see no action buttons at all
+      const showActions = currentUserRole !== 'member';
+      
       // Build assigned clients display
       let assignedClientsHtml = '';
       if (u.assigned_clients && u.assigned_clients.length > 0) {
@@ -125,18 +132,31 @@
         </td>
         <td>${assignedClientsHtml}</td>
         <td class="text-end">
+          ${showActions && window.PermissionManager?.hasPermission('users.edit') ? `
           <button class="btn btn-sm action-btn" data-action="edit" data-id="${u.id}" title="Edit User">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-9.793 9.793a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168L12.146.146zM11.207 2L3 10.207V12h1.793L14 3.793 11.207 2z"/></svg>
           </button>
+          ` : ''}
+          ${showActions && window.PermissionManager?.hasPermission('users.manage_roles') ? `
           <button class="btn btn-sm action-btn" data-action="assign" data-id="${u.id}" title="Change Role">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0a5 5 0 0 0-5 5v1H2a2 2 0 0 0-2 2v4.5A1.5 1.5 0 0 0 1.5 14H6v-1.5A2.5 2.5 0 0 1 8.5 10H10V5a5 5 0 0 0-2-4z"/></svg>
           </button>
+          ` : ''}
+          ${showActions && window.PermissionManager?.hasPermission('clients.assign') ? `
           <button class="btn btn-sm action-btn" data-action="assignClient" data-id="${u.id}" title="Assign Client">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M6 8c1.657 0 3-1.567 3-3.5S7.657 1 6 1 3 2.567 3 4.5 4.343 8 6 8zm4.5 1a3.5 3.5 0 0 0-3.5 3.5V14h7v-1.5A3.5 3.5 0 0 0 10.5 9zM6 9a4 4 0 0 0-4 4v1h8v-1a4 4 0 0 0-4-4z"/></svg>
           </button>
+          ` : ''}
+          ${showActions && window.PermissionManager?.hasPermission('permissions.manage') && u.id !== 1 ? `
+          <button class="btn btn-sm action-btn" data-action="managePermissions" data-id="${u.id}" title="Manage Permissions">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
+          </button>
+          ` : ''}
+          ${showActions && window.PermissionManager?.hasPermission('users.delete') ? `
           <button class="btn btn-sm action-btn delete" data-action="delete" data-id="${u.id}" title="Delete User">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9.5A1.5 1.5 0 0 1 11.5 15h-7A1.5 1.5 0 0 1 3 13.5V4H2.5a1 1 0 1 1 0-2H5l.5-1h5l.5 1h2.5a1 1 0 0 1 1 1zM4.118 4L4 13.5a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5L11.882 4H4.118z"/></svg>
           </button>
+          ` : ''}
         </td>
       `;
       tbody.appendChild(tr);
@@ -146,6 +166,19 @@
   }
 
   async function openAssignClientModal(id){
+    const user = users.find(u => u.id === id);
+    if(!user) return;
+    
+    // Check if current user can assign to this user
+    const currentUser = await window.loadCurrentUser();
+    if(currentUser && currentUser.role !== 'superadmin'){
+      // Admins can only assign to members
+      if(user.role === 'admin' || user.role === 'superadmin'){
+        alert('Admins can only assign clients to members, not to other admins.');
+        return;
+      }
+    }
+    
     clientModalState = {
       userId: id,
       currentPage: 1,
@@ -343,6 +376,140 @@
     modal.show();
   }
 
+  async function openPermissionsModal(userId){
+    const user = users.find(u => u.id === userId);
+    if(!user) return;
+    
+    qs('permUserId').value = userId;
+    qs('permUserName').textContent = user.username;
+    qs('permUserRole').textContent = user.role || 'member';
+    
+    // Load user's effective permissions
+    try {
+      const response = await fetch(`${API_BASE}/permissions/user/${userId}/effective`, {
+        headers: getAuthHeaders()
+      });
+      
+      if(!response.ok) throw new Error('Failed to load permissions');
+      
+      const data = await response.json();
+      
+      // Display role permissions (read-only)
+      const rolePermsContainer = qs('userRolePermissions');
+      if(data.role_permissions.length === 0){
+        rolePermsContainer.innerHTML = '<div class="text-muted small">No role permissions</div>';
+      } else {
+        rolePermsContainer.innerHTML = data.role_permissions
+          .map(p => `<span class="badge bg-secondary me-1 mb-1">${escapeHtml(p)}</span>`)
+          .join('');
+      }
+      
+      // Display user-specific permissions (editable)
+      const userPermsContainer = qs('userSpecificPermissions');
+      if(data.user_specific_permissions.length === 0){
+        userPermsContainer.innerHTML = '<div class="text-muted small">No additional permissions</div>';
+      } else {
+        userPermsContainer.innerHTML = data.user_specific_permissions
+          .map(p => `
+            <span class="badge bg-primary me-1 mb-1">
+              ${escapeHtml(p)}
+              <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
+                      onclick="revokeUserPermission(${userId}, '${escapeHtml(p)}')" 
+                      style="font-size: 0.6rem; vertical-align: middle;"></button>
+            </span>
+          `)
+          .join('');
+      }
+      
+      // Load available permissions
+      const availResponse = await fetch(`${API_BASE}/permissions/available`, {
+        headers: getAuthHeaders()
+      });
+      
+      if(!availResponse.ok) throw new Error('Failed to load available permissions');
+      
+      const allPerms = await availResponse.json();
+      const availablePerms = allPerms.filter(p => 
+        !data.role_permissions.includes(p.name) && 
+        !data.user_specific_permissions.includes(p.name)
+      );
+      
+      const availContainer = qs('availablePermissions');
+      if(availablePerms.length === 0){
+        availContainer.innerHTML = '<div class="text-muted small">No additional permissions available</div>';
+      } else {
+        // Group by resource
+        const grouped = {};
+        availablePerms.forEach(p => {
+          if(!grouped[p.resource]) grouped[p.resource] = [];
+          grouped[p.resource].push(p);
+        });
+        
+        let html = '';
+        for(const [resource, perms] of Object.entries(grouped)){
+          html += `<div class="mb-2"><h6 class="text-uppercase text-muted" style="font-size: 0.7rem">${escapeHtml(resource)}</h6>`;
+          perms.forEach(p => {
+            html += `
+              <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" 
+                      onclick="grantUserPermission(${userId}, '${escapeHtml(p.name)}')">
+                ${escapeHtml(p.name)}
+              </button>
+            `;
+          });
+          html += '</div>';
+        }
+        availContainer.innerHTML = html;
+      }
+      
+    } catch(error){
+      console.error('Error loading permissions:', error);
+      alert('Failed to load user permissions');
+      return;
+    }
+    
+    const modalEl = document.getElementById('permissionsModal');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+  }
+
+  window.grantUserPermission = async function(userId, permissionName){
+    try {
+      const response = await fetch(`${API_BASE}/permissions/user/${userId}/grant`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify([permissionName])
+      });
+      
+      if(!response.ok) throw new Error('Failed to grant permission');
+      
+      // Reload the modal
+      await openPermissionsModal(userId);
+    } catch(error){
+      console.error('Error granting permission:', error);
+      alert('Failed to grant permission');
+    }
+  };
+
+  window.revokeUserPermission = async function(userId, permissionName){
+    if(!confirm(`Remove permission "${permissionName}"?`)) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/permissions/user/${userId}/revoke`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify([permissionName])
+      });
+      
+      if(!response.ok) throw new Error('Failed to revoke permission');
+      
+      // Reload the modal
+      await openPermissionsModal(userId);
+    } catch(error){
+      console.error('Error revoking permission:', error);
+      alert('Failed to revoke permission');
+    }
+  };
+
   function escapeHtml(s){
     if(!s && s !== 0) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -493,6 +660,7 @@
     if(action === 'delete') removeUser(id);
     if(action === 'assign') openRoleModal(id);
     if(action === 'assignClient') openAssignClientModal(id);
+    if(action === 'managePermissions') openPermissionsModal(id);
   }
 
   async function handleSubmit(e){
@@ -656,6 +824,14 @@
 
   // Initialize on page load
   document.addEventListener('DOMContentLoaded', async ()=>{
+    // Initialize permissions first
+    if (window.PermissionManager) {
+      await window.PermissionManager.initializePermissions();
+    }
+    
+    // Load current user info for navbar dropdown
+    await window.loadCurrentUser();
+    
     await seedIfEmpty();
     filteredUsers = [...users]; // Initialize filtered users
     await render();

@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.database import get_db
-from app.models.models import User
+from app.models.models import User, Role
 from app.auth.jwt import create_access_token, get_current_user, verify_password, hash_password, decode_token
+from app.auth.rbac import get_user_permissions
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -42,14 +43,19 @@ class UserResponse(BaseModel):
     role: str
     tenant_id: int
     is_active: bool
+    permissions: List[str] = []
 
 @router.post("/login", response_model=LoginResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate user and return JWT token"""
-    # Find user by username
+    from sqlalchemy.orm import selectinload
+    
+    # Find user by username with eagerly loaded role
     result = await db.execute(
-        select(User).where(User.username == payload.username)
+        select(User)
+        .options(selectinload(User.role_obj))
+        .where(User.username == payload.username)
     )
     user = result.scalar_one_or_none()
     
@@ -72,11 +78,15 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
             detail="Incorrect username or password"
         )
     
+    # Get user role name and permissions
+    role_name = user.role_obj.name if user.role_obj else "member"
+    permissions = await get_user_permissions(user.id, db)
+    
     # Create access token
     token = create_access_token(
         subject=user.username,
         user_id=user.id,
-        role=user.role
+        role=role_name
     )
     
     return LoginResponse(
@@ -86,8 +96,9 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": user.role,
-            "tenant_id": user.tenant_id
+            "role": role_name,
+            "tenant_id": user.tenant_id,
+            "permissions": list(permissions)
         }
     )
 
@@ -114,6 +125,16 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
             detail="Email already registered"
         )
     
+    # Get role_id from role name (default to member)
+    role_result = await db.execute(
+        select(Role).where(Role.name == payload.role)
+    )
+    role = role_result.scalar_one_or_none()
+    if not role:
+        # Default to member role if invalid
+        role_result = await db.execute(select(Role).where(Role.name == "member"))
+        role = role_result.scalar_one()
+    
     # Create new user
     hashed_pwd = hash_password(payload.password)
     new_user = User(
@@ -121,20 +142,25 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
         email=payload.email,
         hashed_password=hashed_pwd,
         tenant_id=payload.tenant_id,
-        role=payload.role
+        role_id=role.id
     )
     
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
     
+    # Use the role we already fetched instead of trying to access role_obj
+    role_name = role.name
+    permissions = await get_user_permissions(new_user.id, db)
+    
     return UserResponse(
         id=new_user.id,
         username=new_user.username,
         email=new_user.email,
-        role=new_user.role,
+        role=role_name,
         tenant_id=new_user.tenant_id,
-        is_active=new_user.is_active
+        is_active=new_user.is_active,
+        permissions=list(permissions)
     )
 
 @router.get("/me", response_model=UserResponse)
@@ -143,8 +169,12 @@ async def get_current_user_info(
     db: AsyncSession = Depends(get_db)
 ):
     """Get current authenticated user information"""
+    from sqlalchemy.orm import selectinload
+    
     result = await db.execute(
-        select(User).where(User.id == current_user["user_id"])
+        select(User)
+        .options(selectinload(User.role_obj))
+        .where(User.id == current_user["user_id"])
     )
     user = result.scalar_one_or_none()
     
@@ -154,13 +184,17 @@ async def get_current_user_info(
             detail="User not found"
         )
     
+    role_name = user.role_obj.name if user.role_obj else "member"
+    permissions = await get_user_permissions(user.id, db)
+    
     return UserResponse(
         id=user.id,
         username=user.username,
         email=user.email,
-        role=user.role,
+        role=role_name,
         tenant_id=user.tenant_id,
-        is_active=user.is_active
+        is_active=user.is_active,
+        permissions=list(permissions)
     )
 
 @router.post("/logout")

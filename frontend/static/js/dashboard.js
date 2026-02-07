@@ -1,28 +1,18 @@
 // Dashboard quick stats and user info
 const API_BASE = window.APP_CONFIG?.API_BASE || 'http://localhost:8000/api';
 
-async function loadCurrentUser(){
-  const token = localStorage.getItem('token');
-  if(!token) return null;
-  try{
-    const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if(res.ok) return await res.json();
-  }catch(e){ console.error(e); }
-  return null;
-}
-
 document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize permissions first
+  if (window.PermissionManager) {
+    await window.PermissionManager.initializePermissions();
+  }
+  
   const signOut = document.getElementById('signOut');
   const welcomeText = document.getElementById('welcomeText');
 
-  const user = await loadCurrentUser();
+  // Use global loadCurrentUser from common.js
+  const user = await window.loadCurrentUser();
   if(user){
-    // Populate navbar dropdown
-    document.getElementById('navUsername').textContent = user.username || 'User';
-    document.getElementById('dropdownUsername').textContent = user.username || 'User';
-    document.getElementById('dropdownRole').textContent = `Role: ${user.role || 'member'}`;
     welcomeText.textContent = `Welcome, ${user.username}!`;
     
     // Hide admin-only elements if not admin

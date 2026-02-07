@@ -590,7 +590,7 @@
                   <p class="text-muted mb-0 small">Create, edit and manage users with role-based access control.</p>
                 </div>
                 <div>
-                  <button id="addUserBtn" class="btn btn-gradient">
+                  <button id="addUserBtn" class="btn btn-gradient" data-require-permission="users.create">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 6px;">
                       <path d="M8 4a.5.5 0 0 1 .5.5V7.5H11a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V8.5H5a.5.5 0 0 1 0-1h2.5V4.5A.5.5 0 0 1 8 4z"/>
                     </svg>
@@ -905,6 +905,70 @@
               </div>
             </div>
 
+            <!-- User Permissions Modal -->
+            <div class="modal fade" id="permissionsModal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content modal-dark">
+                  <div class="modal-header">
+                    <div>
+                      <h5 class="modal-title">Manage User Permissions</h5>
+                      <p class="text-muted mb-0 small">
+                        User: <strong id="permUserName">-</strong> | 
+                        Role: <strong id="permUserRole">-</strong>
+                      </p>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <input type="hidden" id="permUserId" />
+                    
+                    <!-- Role Permissions (Read-only) -->
+                    <div class="mb-4">
+                      <h6 class="text-white mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                          <path d="M8 0a5 5 0 0 0-5 5v1H2a2 2 0 0 0-2 2v4.5A1.5 1.5 0 0 0 1.5 14H6v-1.5A2.5 2.5 0 0 1 8.5 10H10V5a5 5 0 0 0-2-4z"/>
+                        </svg>
+                        Role Permissions
+                      </h6>
+                      <div id="userRolePermissions" class="p-3 rounded" style="background: rgba(255,255,255,0.05);">
+                        Loading...
+                      </div>
+                    </div>
+                    
+                    <!-- User-Specific Permissions (Editable) -->
+                    <div class="mb-4">
+                      <h6 class="text-white mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                          <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3z"/>
+                          <path fill-rule="evenodd" d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                        </svg>
+                        Additional User Permissions
+                      </h6>
+                      <div id="userSpecificPermissions" class="p-3 rounded" style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3);">
+                        Loading...
+                      </div>
+                    </div>
+                    
+                    <!-- Available Permissions to Grant -->
+                    <div>
+                      <h6 class="text-white mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                          <path d="M8 4a.5.5 0 0 1 .5.5V7.5H11a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V8.5H5a.5.5 0 0 1 0-1h2.5V4.5A.5.5 0 0 1 8 4z"/>
+                        </svg>
+                        Grant Additional Permissions
+                      </h6>
+                      <div id="availablePermissions" class="p-3 rounded" style="background: rgba(255,255,255,0.05); max-height: 300px; overflow-y: auto;">
+                        Loading...
+                      </div>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </main>
       </div>
@@ -912,6 +976,7 @@
 
     <script src="./vendor/bootstrap/bootstrap.bundle.min.js"></script>
     <script src="./js/config.js"></script>
+    <script src="./js/permissions.js"></script>
     <script src="./js/admin.js"></script>
     <script src="./js/common.js"></script>
   </body>

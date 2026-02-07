@@ -24,9 +24,9 @@
   let apiBase, wsBase;
   
   if (isLocal) {
-    // Local development - use localhost:8000
-    apiBase = 'http://localhost:8000/api';
-    wsBase = 'ws://localhost:8000/api';
+    // Local development - use localhost:8001
+    apiBase = 'http://localhost:8001/api';
+    wsBase = 'ws://localhost:8001/api';
   } else {
     // Production/Azure - use current origin or relative path
     const origin = window.location.origin;

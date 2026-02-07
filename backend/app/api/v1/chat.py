@@ -77,20 +77,12 @@ async def save_chat_message(tenant_id: int, sender: str, message: str, metadata:
         # Generate embedding if OpenAI is available
         embedding_str = None
         try:
-            from openai import AsyncOpenAI
             from app.config import settings
+            from app.services.openai_client import get_async_openai_client, get_model_name
             
-            if settings.OPENAI_API_KEY or settings.AZURE_OPENAI_KEY:
-                if settings.OPENAI_API_TYPE == "azure" and settings.AZURE_OPENAI_ENDPOINT:
-                    client = AsyncOpenAI(
-                        api_key=settings.AZURE_OPENAI_KEY,
-                        azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-                        api_version="2024-02-15-preview"
-                    )
-                    model = "text-embedding-ada-002"  # Your Azure deployment name
-                else:
-                    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-                    model = "text-embedding-3-small"
+            if settings.OPENAI_API_KEY or settings.AZURE_CLIENT_ID:
+                client = await get_async_openai_client()
+                model = get_model_name("embedding")
                 
                 response = await client.embeddings.create(
                     model=model,
@@ -144,31 +136,20 @@ async def get_cloud_resources_summary(tenant_id: int) -> dict:
 async def generate_ai_response(tenant_id: int, user_message: str, history: List[dict]) -> str:
     """Generate AI response using OpenAI with function calling for cloud resources"""
     try:
-        from openai import AsyncOpenAI
         from app.config import settings
+        from app.services.openai_client import get_async_openai_client, get_model_name
         
         # Check if API key is configured
-        api_key = None
-        if settings.OPENAI_API_TYPE == "azure":
-            if not settings.AZURE_OPENAI_KEY or "replace" in settings.AZURE_OPENAI_KEY.lower():
-                return "Azure OpenAI API key not configured. Please set AZURE_OPENAI_KEY environment variable."
-            api_key = settings.AZURE_OPENAI_KEY
+        if settings.OPENAI_PROVIDER == "azure":
+            if not settings.AZURE_CLIENT_ID or not settings.AZURE_CLIENT_SECRET:
+                return "Azure OpenAI not configured. Please set AZURE_CLIENT_ID and AZURE_CLIENT_SECRET environment variables."
         else:
             if not settings.OPENAI_API_KEY or "replace" in settings.OPENAI_API_KEY.lower() or settings.OPENAI_API_KEY == "sk-":
                 return "OpenAI API key not configured. Please set OPENAI_API_KEY environment variable to your OpenAI API key from https://platform.openai.com/account/api-keys"
-            api_key = settings.OPENAI_API_KEY
         
-        # Initialize OpenAI client
-        if settings.OPENAI_API_TYPE == "azure" and settings.AZURE_OPENAI_ENDPOINT:
-            client = AsyncOpenAI(
-                api_key=api_key,
-                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-                api_version="2024-02-15-preview"
-            )
-            model = "gpt-4"  # Your Azure deployment name
-        else:
-            client = AsyncOpenAI(api_key=api_key)
-            model = "gpt-4o-mini"
+        # Initialize OpenAI client using factory
+        client = await get_async_openai_client()
+        model = get_model_name("chat")
         
         # Build conversation context
         messages = [

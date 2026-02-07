@@ -33,10 +33,31 @@ Version: 2.0.0
 Last Modified: 2026-01-25
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, ForeignKey, Text, Float, Index
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, ForeignKey, Text, Float, Index, Table
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.database import Base
+
+
+# Association table for many-to-many relationship between roles and permissions
+role_permissions = Table(
+    'role_permissions',
+    Base.metadata,
+    Column('role_id', Integer, ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
+    Column('permission_id', Integer, ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True),
+    Column('created_at', DateTime, server_default=func.now())
+)
+
+# Association table for user-specific permission overrides
+user_permissions = Table(
+    'user_permissions',
+    Base.metadata,
+    Column('id', Integer, primary_key=True),
+    Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
+    Column('permission_id', Integer, ForeignKey('permissions.id', ondelete='CASCADE'), nullable=False),
+    Column('created_at', DateTime, server_default=func.now()),
+    Index('ix_user_permission_unique', 'user_id', 'permission_id', unique=True)
+)
 
 class Tenant(Base):
     """
@@ -79,6 +100,82 @@ class Tenant(Base):
     # a different attribute name to avoid SQLAlchemy conflicts.
     metadata_json = Column('metadata', JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class Role(Base):
+    """
+    Role model for RBAC (Role-Based Access Control).
+    
+    Roles define groups of permissions that can be assigned to users.
+    Default roles: superadmin, admin, member.
+    
+    Attributes:
+        id (int): Primary key, auto-incrementing role ID
+        name (str): Unique role name (e.g., "superadmin", "admin", "member")
+        description (str): Human-readable description of the role
+        is_system (bool): System role (cannot be deleted/modified)
+        created_at (datetime): Role creation timestamp (UTC)
+    
+    Relationships:
+        - permissions: List of Permission objects assigned to this role
+        - users: List of User objects with this role
+    
+    Example:
+        role = Role(
+            name="admin",
+            description="Administrator with management access",
+            is_system=True
+        )
+    """
+    __tablename__ = "roles"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    is_system = Column(Boolean, default=False)  # System roles cannot be deleted
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    permissions = relationship("Permission", secondary=role_permissions, back_populates="roles")
+    users = relationship("User", back_populates="role_obj")
+
+
+class Permission(Base):
+    """
+    Permission model for fine-grained access control.
+    
+    Permissions define specific actions that can be performed on resources.
+    Format: resource.action (e.g., 'users.create', 'clients.view')
+    
+    Attributes:
+        id (int): Primary key, auto-incrementing permission ID
+        name (str): Unique permission name (e.g., "users.create")
+        resource (str): Resource type (e.g., "users", "clients", "metrics")
+        action (str): Action on resource (e.g., "view", "create", "edit", "delete")
+        description (str): Human-readable description of the permission
+        created_at (datetime): Permission creation timestamp (UTC)
+    
+    Relationships:
+        - roles: List of Role objects that have this permission
+    
+    Example:
+        permission = Permission(
+            name="users.create",
+            resource="users",
+            action="create",
+            description="Create new users in the system"
+        )
+    """
+    __tablename__ = "permissions"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    resource = Column(String, nullable=False, index=True)
+    action = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
+
 
 class User(Base):
     """
@@ -129,7 +226,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=True)
-    role = Column(String, default="member")  # super_admin / admin / member
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)  # Foreign key to roles table
     is_active = Column(Boolean, default=True)
     status = Column(String, default="active")  # active / inactive
     created_at = Column(DateTime, server_default=func.now())
@@ -138,8 +235,11 @@ class User(Base):
 
     tenant = relationship("Tenant", foreign_keys=[tenant_id])
     assigned_client = relationship("Tenant", foreign_keys=[assigned_client_id])
+    role_obj = relationship("Role", back_populates="users")
     # Many-to-many relationship with clients through UserClientPermission
     client_permissions = relationship("UserClientPermission", back_populates="user", cascade="all, delete-orphan")
+    # Many-to-many relationship with permissions (user-specific overrides)
+    user_permissions = relationship("Permission", secondary=user_permissions, backref="users_with_permission")
 
 class UserClientPermission(Base):
     """
