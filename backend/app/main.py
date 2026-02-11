@@ -57,27 +57,32 @@ app = FastAPI(title="Cloud Optimizer API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CRITICAL: JWT authentication middleware MUST be added before CORS
-# This ensures authentication runs first on all requests
-app.add_middleware(JWTAuthMiddleware)
-
 # CORS configuration for frontend communication
+# CRITICAL: CORS middleware MUST be added BEFORE JWT middleware
+# This ensures preflight OPTIONS requests are handled before authentication
 # Security: Restrict to known origins in production (never use "*" in prod)
 allowed_origins = [
     "http://localhost:3001",  # Local frontend development
     "http://127.0.0.1:3001",  # Alternative localhost
+    "http://localhost:3000",  # Alternative frontend port
+    "http://127.0.0.1:3000",  # Alternative frontend port
 ]
 # In development, allow all origins for testing (INSECURE, dev only)
 if settings.ENV == "development":
-    allowed_origins.append("*")
+    allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# JWT authentication middleware MUST be added AFTER CORS
+# This ensures preflight requests don't require authentication
+app.add_middleware(JWTAuthMiddleware)
 
 # Security headers middleware - adds HTTP security headers to all responses
 @app.middleware("http")
