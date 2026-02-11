@@ -61,24 +61,32 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CRITICAL: CORS middleware MUST be added BEFORE JWT middleware
 # This ensures preflight OPTIONS requests are handled before authentication
 # Security: Restrict to known origins in production (never use "*" in prod)
-allowed_origins = [
-    "http://localhost:3001",  # Local frontend development
-    "http://127.0.0.1:3001",  # Alternative localhost
-    "http://localhost:3000",  # Alternative frontend port
-    "http://127.0.0.1:3000",  # Alternative frontend port
-]
-# In development, allow all origins for testing (INSECURE, dev only)
 if settings.ENV == "development":
-    allowed_origins = ["*"]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+    # Development mode - allow all origins (INSECURE, dev only)
+    # Note: Cannot use allow_credentials=True with allow_origins=["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+else:
+    # Production mode - restrict to specific origins
+    allowed_origins = [
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        # Add production domains here
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
 
 # JWT authentication middleware MUST be added AFTER CORS
 # This ensures preflight requests don't require authentication
